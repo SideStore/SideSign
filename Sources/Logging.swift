@@ -49,7 +49,7 @@ public func verboseLog(_ text: @autoclosure () -> String) {
     }
 }
 
-func prettyJSONString(from object: any Sendable) -> String {
+func prettyJSONString(from object: Any) -> String {
     let sanitized = sanitizeForJSON(object)
     if JSONSerialization.isValidJSONObject(sanitized) {
         do {
@@ -149,10 +149,10 @@ private func prettyPrintXML(_ rawXML: String) -> String {
     return result.joined(separator: "\n")
 }
 
-private func sanitizeForJSON(_ object: any Sendable) -> any Sendable {
-    if let dict = object as? [String: any Sendable] {
+private func sanitizeForJSON(_ object: Any) -> Any {
+    if let dict = object as? [String: Any] {
         return dict.mapValues { sanitizeForJSON($0) }
-    } else if let array = object as? [any Sendable] {
+    } else if let array = object as? [Any] {
         return array.map { sanitizeForJSON($0) }
     } else if let date = object as? Date {
         let formatter = ISO8601DateFormatter()

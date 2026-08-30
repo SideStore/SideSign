@@ -180,7 +180,7 @@ extension Entitlement: _ObjectiveCBridgeable {
 
 // Compatibility completion handler extensions on DeveloperPortalAPI for legacy callers
 public extension DeveloperPortalAPI {
-    func fetchTeams(for account: Account, session: Session, completionHandler: @escaping ([Team]?, Error?) -> Void) {
+    func fetchTeams(for account: Account, session: Session, completionHandler: @escaping @Sendable ([Team]?, Error?) -> Void) {
         Task {
             do {
                 let teams = try await self.fetchTeams(for: account, session: session)
@@ -191,7 +191,7 @@ public extension DeveloperPortalAPI {
         }
     }
 
-    func fetchDevices(for team: Team, types: DeviceType, session: Session, completionHandler: @escaping ([Device]?, Error?) -> Void) {
+    func fetchDevices(for team: Team, types: DeviceType, session: Session, completionHandler: @escaping @Sendable ([Device]?, Error?) -> Void) {
         Task {
             do {
                 let devices = try await self.fetchDevices(for: team, types: types, session: session)
@@ -202,7 +202,7 @@ public extension DeveloperPortalAPI {
         }
     }
 
-    func registerDevice(name: String, identifier: String, type: DeviceType, team: Team, session: Session, completionHandler: @escaping (Device?, Error?) -> Void) {
+    func registerDevice(name: String, identifier: String, type: DeviceType, team: Team, session: Session, completionHandler: @escaping @Sendable (Device?, Error?) -> Void) {
         Task {
             do {
                 let device = try await self.registerDevice(name: name, identifier: identifier, type: type, team: team, session: session)
@@ -213,7 +213,7 @@ public extension DeveloperPortalAPI {
         }
     }
 
-    func fetchCertificates(for team: Team, session: Session, completionHandler: @escaping ([X509Certificate]?, Error?) -> Void) {
+    func fetchCertificates(for team: Team, session: Session, completionHandler: @escaping @Sendable ([X509Certificate]?, Error?) -> Void) {
         Task {
             do {
                 let certs = try await self.fetchCertificates(for: team, session: session)
@@ -224,7 +224,7 @@ public extension DeveloperPortalAPI {
         }
     }
 
-    func fetchAccount(session: Session, completionHandler: @escaping (Result<Account, Error>) -> Void) {
+    func fetchAccount(session: Session, completionHandler: @escaping @Sendable (Result<Account, Error>) -> Void) {
         Task {
             do {
                 let account = try await self.fetchAccount(session: session)
@@ -241,7 +241,7 @@ public extension DeveloperPortalAPI {
         anisetteData: AnisetteData,
         xcodeVersion: String,
         verificationHandler: DeveloperPortal.VerificationHandler?,
-        completionHandler: @escaping (Account?, Session?, Error?) -> Void
+        completionHandler: @escaping @Sendable (Account?, Session?, Error?) -> Void
     ) {
         Task {
             do {
@@ -259,7 +259,7 @@ public extension DeveloperPortalAPI {
         }
     }
 
-    func deleteAppID(_ appID: AppID, for team: Team, session: Session, completionHandler: @escaping (Bool, Error?) -> Void) {
+    func deleteAppID(_ appID: AppID, for team: Team, session: Session, completionHandler: @escaping @Sendable (Bool, Error?) -> Void) {
         Task {
             do {
                 let success = try await self.deleteAppID(appID, for: team, session: session)
@@ -270,3 +270,4 @@ public extension DeveloperPortalAPI {
         }
     }
 }
+
