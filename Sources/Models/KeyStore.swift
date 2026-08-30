@@ -46,7 +46,7 @@ public struct KeyStore: Sendable, Equatable, Hashable, Identifiable {
         self.password = password
     }
 
-    public init(p12Data: Data, password: String) throws {
+    public init(p12Data: Data, password: String? = nil) throws {
         let result = try PKCS12Parser.extract(p12Data, password: password)
 
         guard let x509 = X509Certificate(data: result.cert) else {
