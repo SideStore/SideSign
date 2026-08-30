@@ -11,6 +11,18 @@ import SideSign
 import CodeSignKit
 import GSACryptoKit
 
+extension DeviceType {
+    var displayName: String {
+        if contains(.iPhone) { return "iPhone" }
+        if contains(.iPad) { return "iPad" }
+        if contains(.appleTV) { return "Apple TV" }
+        if contains(.appleWatch) { return "Apple Watch" }
+        if contains(.mac) { return "Mac" }
+        if contains(.visionPro) { return "Apple Vision Pro" }
+        return "Device"
+    }
+}
+
 func printUsage() {
     print("""
     sidesign - Advanced App Signing, CodeSignKit, and Apple Developer Portal CLI for iOS, macOS, tvOS, visionOS, watchOS
@@ -623,7 +635,7 @@ func handleAuth(args: [String]) async throws {
     let portal = DeveloperPortal()
 
     print("Authenticating with Apple Developer Portal...")
-    let session = try await portal.authenticate(
+    let authSession = try await portal.authenticate(
         appleID: email,
         password: pwd,
         anisetteData: anisetteData,
@@ -632,24 +644,27 @@ func handleAuth(args: [String]) async throws {
         handleCLI2FA(mode: mode, completion: completion)
     }
 
-    print("Authentication successful! Logged in as: \(session.account.name)")
+    let account = authSession.account
+    let session = authSession.session
+
+    print("Authentication successful! Logged in as: \(account.name)")
 
     let action = args[0]
     if action == "login" {
-        print("Session DSID: \(session.account.identifier)")
+        print("Session DSID: \(account.identifier)")
         return
     }
 
     switch action {
     case "teams":
         print("\nDeveloper Teams:")
-        let teams = try await portal.fetchTeams(for: session.account, session: session)
+        let teams = try await portal.fetchTeams(for: account, session: session)
         for t in teams {
             print("  * \(t.name) (ID: \(t.identifier), Type: \(t.type.rawValue))")
         }
 
     case "devices":
-        let teams = try await portal.fetchTeams(for: session.account, session: session)
+        let teams = try await portal.fetchTeams(for: account, session: session)
         guard let team = teams.first else {
             print("Error: No teams found on this account.")
             return
@@ -674,12 +689,12 @@ func handleAuth(args: [String]) async throws {
             print("\nRegistered Devices for team '\(team.name)':")
             let devices = try await portal.fetchDevices(for: team, session: session)
             for d in devices {
-                print("  * \(d.name) [\(d.identifier)] (\(d.type.description))")
+                print("  * \(d.name) [\(d.identifier)] (\(d.type.displayName))")
             }
         }
 
     case "certs":
-        let teams = try await portal.fetchTeams(for: session.account, session: session)
+        let teams = try await portal.fetchTeams(for: account, session: session)
         guard let team = teams.first else {
             print("Error: No teams found on this account.")
             return
@@ -702,7 +717,7 @@ func handleAuth(args: [String]) async throws {
             print("Revoking certificate \(certID)...")
             let certs = try await portal.fetchCertificates(for: team, session: session)
             if let targetCert = certs.first(where: { $0.identifier == certID }) {
-                try await portal.revokeCertificate(targetCert, team: team, session: session)
+                _ = try await portal.revokeCertificate(targetCert, for: team, session: session)
                 print("Certificate revoked successfully.")
             } else {
                 print("Error: Certificate ID not found.")
@@ -711,12 +726,12 @@ func handleAuth(args: [String]) async throws {
             print("\nCertificates for team '\(team.name)':")
             let certs = try await portal.fetchCertificates(for: team, session: session)
             for c in certs {
-                print("  * \(c.name) [ID: \(c.identifier), Serial: \(c.serialNumber)]")
+                print("  * \(c.name) [ID: \(c.identifier ?? "unknown"), Serial: \(c.serialNumber)]")
             }
         }
 
     case "appids":
-        let teams = try await portal.fetchTeams(for: session.account, session: session)
+        let teams = try await portal.fetchTeams(for: account, session: session)
         guard let team = teams.first else { return }
         print("\nApp IDs for team '\(team.name)':")
         let appIDs = try await portal.fetchAppIDs(for: team, session: session)
@@ -725,7 +740,7 @@ func handleAuth(args: [String]) async throws {
         }
 
     case "profiles":
-        let teams = try await portal.fetchTeams(for: session.account, session: session)
+        let teams = try await portal.fetchTeams(for: account, session: session)
         guard let team = teams.first else { return }
         print("\nProvisioning Profiles for team '\(team.name)':")
         let profiles = try await portal.fetchProvisioningProfiles(for: team, session: session)
