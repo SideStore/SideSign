@@ -11,12 +11,15 @@ import Foundation
 public struct DeviceType: OptionSet, Sendable, Codable, Equatable, Hashable {
     public let rawValue: Int
 
-    public static let iPhone  = DeviceType(rawValue: 1 << 1)
-    public static let iPad    = DeviceType(rawValue: 1 << 2)
-    public static let appleTV = DeviceType(rawValue: 1 << 3)
+    public static let iPhone     = DeviceType(rawValue: 1 << 1)
+    public static let iPad       = DeviceType(rawValue: 1 << 2)
+    public static let appleTV    = DeviceType(rawValue: 1 << 3)
+    public static let appleWatch = DeviceType(rawValue: 1 << 4)
+    public static let mac        = DeviceType(rawValue: 1 << 5)
+    public static let visionPro  = DeviceType(rawValue: 1 << 6)
 
     public static let none: DeviceType = []
-    public static let all: DeviceType = [.iPhone, .iPad, .appleTV]
+    public static let all: DeviceType = [.iPhone, .iPad, .appleTV, .appleWatch, .mac, .visionPro]
 
     public init(rawValue: Int) {
         self.rawValue = rawValue
@@ -53,12 +56,15 @@ public struct Device: Sendable, Codable, Equatable, Hashable, Identifiable {
         if let directType = try? container.decodeIfPresent(DeviceType.self, forKey: .type) {
             self.type = directType
         } else {
-            let deviceClass = (try? container.decodeIfPresent(String.self, forKey: .deviceClass)) ?? "iphone"
+            let deviceClass = ((try? container.decodeIfPresent(String.self, forKey: .deviceClass)) ?? "iphone").lowercased()
             switch deviceClass {
-            case "iphone": self.type = .iPhone
-            case "ipad":   self.type = .iPad
-            case "tvOS":   self.type = .appleTV
-            default:       self.type = .none
+            case "iphone":                        self.type = .iPhone
+            case "ipad":                          self.type = .iPad
+            case "tvos", "appletv":               self.type = .appleTV
+            case "watchos", "applewatch", "watch": self.type = .appleWatch
+            case "mac", "macos":                  self.type = .mac
+            case "visionos", "applevision", "xr": self.type = .visionPro
+            default:                              self.type = .none
             }
         }
         self.osVersion = try? container.decodeIfPresent(OperatingSystemVersion.self, forKey: .osVersion)

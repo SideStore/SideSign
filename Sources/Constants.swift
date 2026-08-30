@@ -80,6 +80,9 @@ enum GrandSlamAuthErrorCodes {
     static let appSpecificPasswordRequired         = -20101
     static let appSpecificPasswordRequiredFallback = -20209
     static let incorrectVerificationCode           = -21669
+    static let tooManyCodesRequested               = -20102
+    static let tooManyAttempts                     = -21668
+    static let rateLimited                         = -22411
     static let serverError                         = -22416
 }
 
@@ -98,12 +101,49 @@ enum DeveloperPortalResultCodes {
 }
 
 enum HTTPStatusCodes {
-    static let ok        = 200
-    static let noContent = 204
+    static let ok                  = 200
+    static let noContent           = 204
+    static let badRequest          = 400
+    static let unauthorized        = 401
+    static let forbidden           = 403
+    static let notFound            = 404
+    static let tooManyRequests     = 429
+    static let internalServerError = 500
+    static let badGateway          = 502
+    static let serviceUnavailable  = 503
+    static let gatewayTimeout      = 504
+
+    static func localizedDescription(for statusCode: Int) -> String {
+        switch statusCode {
+        case badRequest:
+            return "The server rejected the request parameters."
+        case unauthorized:
+            return "Your sign-in session expired or is unauthorized."
+        case forbidden:
+            return "Access to this Apple Developer service was denied."
+        case notFound:
+            return "The requested Apple service endpoint could not be found."
+        case tooManyRequests:
+            return "Too many requests sent to Apple. Please wait a few moments and try again."
+        case internalServerError:
+            return "Apple's authentication servers encountered an internal error."
+        case badGateway:
+            return "Apple's servers received an invalid gateway response."
+        case serviceUnavailable:
+            return "Apple Developer Portal is temporarily unavailable or undergoing maintenance."
+        case gatewayTimeout:
+            return "Apple's servers took too long to respond (connection timed out)."
+        default:
+            return "Apple service returned an unexpected error (HTTP \(statusCode))."
+        }
+    }
 }
 
 enum UIDeviceFamilyCodes {
-    static let iPhone  = 1
-    static let iPad    = 2
-    static let appleTV = 3
+    static let iPhone     = 1
+    static let iPad       = 2
+    static let appleTV    = 3
+    static let appleWatch = 4
+    static let mac        = 6
+    static let visionPro  = 7
 }

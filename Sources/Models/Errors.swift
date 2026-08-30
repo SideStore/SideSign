@@ -32,6 +32,7 @@ public enum DeveloperPortalError: Error, LocalizedError, Sendable {
     case authenticationHandshakeFailed(cause: String)
     case invalidAnisetteData(cause: String)
     case tooManyCertificates(cause: String)
+    case tooManyAttempts(cause: String)
     case accountRepairRequired(url: URL?, message: String)
 
     public var errorDescription: String? {
@@ -56,6 +57,7 @@ public enum DeveloperPortalError: Error, LocalizedError, Sendable {
         case .provisioningProfileDoesNotExist(let id):          return "There is no provisioning profile with identifier '\(id)' on this team."
         case .requiresTwoFactorAuthentication:                  return "This account requires signing in with two-factor authentication."
         case .incorrectVerificationCode(let cause):             return cause ?? "Incorrect verification code."
+        case .tooManyAttempts(let cause):                       return cause
         case .authenticationHandshakeFailed(let cause):         return "Authentication handshake failed: \(cause)"
         case .invalidAnisetteData(let cause):                   return "Invalid anisette data: \(cause)"
         case .tooManyCertificates(let cause):                   return "Maximum number of certificates reached: \(cause)"

@@ -9,14 +9,35 @@
 import Foundation
 import CodeSignKit
 
-public enum TwoFactorMode: String, Sendable {
-    case trustedDevice
+public struct TrustedPhoneNumber: Sendable, Hashable, Identifiable, Codable {
+    public let id: String
+    public let number: String
+
+    public init(id: String, number: String) {
+        self.id = id
+        self.number = number
+    }
+}
+
+public enum TwoFactorDeliveryMode: String, Sendable {
     case sms
     case voice
 }
 
+public enum TwoFactorMode: Sendable, Equatable {
+    case trustedDevice
+    case sms(phoneNumbers: [TrustedPhoneNumber], activeID: String)
+    case voice(phoneNumbers: [TrustedPhoneNumber], activeID: String)
+}
+
+public enum TwoFactorAction: Sendable {
+    case code(String)
+    case requestPhone(id: String, mode: TwoFactorDeliveryMode)
+    case cancel
+}
+
 public extension DeveloperPortal {
-    typealias VerificationHandler = @Sendable (TwoFactorMode, @escaping @Sendable (String?) -> Void) -> Void
+    typealias VerificationHandler = @Sendable (TwoFactorMode, @escaping @Sendable (TwoFactorAction) -> Void) -> Void
 }
 
 public protocol DeveloperPortalAPI: Sendable {

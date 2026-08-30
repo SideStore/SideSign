@@ -88,10 +88,13 @@ public struct AppBundle: Sendable, Identifiable, Hashable, Equatable {
 
         func deviceType(from value: Int) -> DeviceType {
             switch value {
-            case UIDeviceFamilyCodes.iPhone:    return .iPhone
-            case UIDeviceFamilyCodes.iPad:      return .iPad
-            case UIDeviceFamilyCodes.appleTV:   return .appleTV
-            default:                            return .iPhone
+            case UIDeviceFamilyCodes.iPhone:     return .iPhone
+            case UIDeviceFamilyCodes.iPad:       return .iPad
+            case UIDeviceFamilyCodes.appleTV:    return .appleTV
+            case UIDeviceFamilyCodes.appleWatch: return .appleWatch
+            case UIDeviceFamilyCodes.mac:        return .mac
+            case UIDeviceFamilyCodes.visionPro:  return .visionPro
+            default:                             return .iPhone
             }
         }
 

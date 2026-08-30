@@ -37,7 +37,10 @@ public typealias ALTError                   = SignerError
 public typealias ALTServerError             = ServerError
 public typealias ALTCertificateError        = CertificateError
 public typealias CertificatesManager        = CertificateParser
+public typealias ALTTrustedPhoneNumber      = TrustedPhoneNumber
+public typealias ALTTwoFactorDeliveryMode    = TwoFactorDeliveryMode
 public typealias ALTTwoFactorMode           = TwoFactorMode
+public typealias ALTTwoFactorAction         = TwoFactorAction
 
 public let AltSignErrorDomain               = "com.altstore.AltSign"
 public let ALTAppleAPIErrorDomain           = "com.altstore.AltSign.AppleAPI"
@@ -45,8 +48,11 @@ public let ALTUnderlyingAppleAPIErrorDomain = "com.altstore.AltSign.UnderlyingAp
 public let ALTAppNameErrorKey               = "ALTAppName"
 
 public extension DeviceType {
-    static let iphone: DeviceType           = .iPhone
-    static let ipad: DeviceType             = .iPad
+    static let iphone: DeviceType = .iPhone
+    static let ipad: DeviceType   = .iPad
+    static let tv: DeviceType     = .appleTV
+    static let watch: DeviceType  = .appleWatch
+    static let vision: DeviceType = .visionPro
 }
 
 public extension SignerError {
