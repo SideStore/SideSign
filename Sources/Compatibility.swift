@@ -275,6 +275,10 @@ extension Feature: _ObjectiveCBridgeable {
     public static func _unconditionallyBridgeFromObjectiveC(_ source: NSString?) -> Feature {
         Feature(rawValue: (source ?? "") as String)
     }
+
+    init?(entitlement: String) {
+        self.init(entitlement: Entitlement(entitlement))
+    }
 }
 
 extension Entitlement: _ObjectiveCBridgeable {
@@ -300,6 +304,14 @@ extension Entitlement: _ObjectiveCBridgeable {
 
 // Compatibility completion handler extensions on DeveloperPortalAPI for legacy callers
 public extension DeveloperPortalAPI {
+    func addAppGroup(withName name: String, groupIdentifier: String, team: Team, session: Session) async throws -> AppGroup {
+        try await addAppGroup(name: name, groupIdentifier: groupIdentifier, team: team, session: session)
+    }
+
+    func assign(_ appID: AppID, to appGroups: [AppGroup], team: Team, session: Session) async throws -> AppID {
+        try await assignAppGroups(appGroups, to: appID, team: team, session: session)
+    }
+
     func fetchTeams(for account: Account, session: Session, completionHandler: @escaping @Sendable ([Team]?, Error?) -> Void) {
         Task {
             do {
