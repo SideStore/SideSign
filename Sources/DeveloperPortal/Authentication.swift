@@ -390,6 +390,39 @@ public extension DeveloperPortal {
         return results
     }
 
+    private func parseXMLUIAlertMessage(from data: Data) -> (title: String?, message: String?) {
+        guard let str = String(data: data, encoding: .utf8) else { return (nil, nil) }
+        var title: String?
+        var message: String?
+        if let titleRange = str.range(of: "(?<=title=\")[^\"]+", options: .regularExpression) {
+            title = String(str[titleRange])
+        }
+        if let msgRange = str.range(of: "(?<=message=\")[^\"]+", options: .regularExpression) {
+            message = String(str[msgRange])
+        }
+        return (title, message)
+    }
+
+    private func parseXMLUIObfuscatedNumber(from data: Data) -> String? {
+        guard let str = String(data: data, encoding: .utf8) else { return nil }
+        let patterns = [
+            #"(?:to|at)\s+([+•\d\s\(\)-]{4,25})[.\s<]"#,
+            #"([+•\d\s\(\)-]*[•]+[+•\d\s\(\)-]*)"#
+        ]
+        for pattern in patterns {
+            if let matchRange = str.range(of: pattern, options: .regularExpression) {
+                let matched = String(str[matchRange])
+                    .replacingOccurrences(of: "to ", with: "")
+                    .replacingOccurrences(of: "at ", with: "")
+                    .trimmingCharacters(in: CharacterSet(charactersIn: ". <\n\r\t"))
+                if matched.contains("•") && matched.count >= 3 {
+                    return matched
+                }
+            }
+        }
+        return nil
+    }
+
     private func requestTrustedDeviceTwoFactorCode(dsid: String,
                                                    idmsToken: String,
                                                    anisetteData: AnisetteData,
@@ -541,9 +574,12 @@ public extension DeveloperPortal {
         let numberObfuscated = (phoneDict?["numberWithDialCode"] as? String) 
             ?? (phoneDict?["obfuscatedNumber"] as? String) 
             ?? (phoneDict?["lastTwoDigits"] as? String).map { "••\($0)" } 
+            ?? parseXMLUIObfuscatedNumber(from: data)
             ?? parsedNumbers.first(where: { $0.id == phoneID })?.number
             ?? ""
-        if parsedNumbers.isEmpty {
+        if let idx = parsedNumbers.firstIndex(where: { $0.id == phoneID }), !numberObfuscated.isEmpty {
+            parsedNumbers[idx] = TrustedPhoneNumber(id: phoneID, number: numberObfuscated)
+        } else if parsedNumbers.isEmpty {
             parsedNumbers = [TrustedPhoneNumber(id: phoneID, number: numberObfuscated.isEmpty ? "Phone \(phoneID)" : numberObfuscated)]
         }
         debugLog("[SideSign] sendPhonePut received phone response (id: \(phoneID), mode: \(activeMode), number: \(numberObfuscated), total phones: \(parsedNumbers.count))")
@@ -599,9 +635,12 @@ public extension DeveloperPortal {
                 let verifyStatusCode = verifyHttpResponse?.statusCode ?? 0
 
                 let verifyDict = parsePlistOrJSON(verifyData)
+                let (xmluiTitle, xmluiMessage) = parseXMLUIAlertMessage(from: verifyData)
                 let errorCode = verifyDict?["ec"] as? Int ?? 0
                 let errorMsg = (verifyDict?["em"] as? String)
                     ?? ((verifyDict?["Status"] as? [String: any Sendable])?["em"] as? String)
+                    ?? xmluiMessage
+                    ?? xmluiTitle
 
                 if errorCode == GrandSlamAuthErrorCodes.tooManyAttempts 
                     || errorCode == GrandSlamAuthErrorCodes.tooManyCodesRequested 
@@ -630,8 +669,9 @@ public extension DeveloperPortal {
 
                 guard verifyHttpResponse?.allHeaderFields.keys.contains(where: { ($0 as? String)?.lowercased() == "x-apple-pe-token" }) == true else {
                     let rawStr = prettyJSONString(from: verifyData)
-                    debugLog("[SideSign] Secondary code verification succeeded HTTP \(HTTPStatusCodes.ok) but missing PE token header. Body: \(rawStr)")
-                    throw DeveloperPortalError.incorrectVerificationCode(cause: errorMsg ?? "Missing Apple session verification token")
+                    let reason = errorMsg ?? "Incorrect verification code or missing session token"
+                    debugLog("[SideSign] Secondary code verification failed (HTTP \(HTTPStatusCodes.ok) missing PE token header): \(reason) - Body: \(rawStr)")
+                    continue
                 }
 
                 debugLog("[SideSign] Secondary 2FA code verified successfully!")
