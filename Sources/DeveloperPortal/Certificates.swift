@@ -66,9 +66,23 @@ public extension DeveloperPortal {
             }
         )
 
-        guard let cert = response.certRequest?.toCertificate() else {
-            debugLog("[SideSign] addCertificate error: Missing certificate in response")
-            throw ServerError.badServerResponse(reason: "Missing certificate in response", jsonPayload: "")
+        let cert: X509Certificate
+        if let directCert = response.certRequest?.toCertificate() {
+            cert = directCert
+        } else {
+            let serial = response.certRequest?.serialNumber
+            let certId = response.certRequest?.certificateId ?? response.certRequest?.certRequestId
+            let allCerts = try await fetchCertificates(for: team, session: session)
+
+            guard let matchedCert = allCerts.first(where: {
+                if let serial, $0.serialNumber.caseInsensitiveCompare(serial) == .orderedSame { return true }
+                if let certId, $0.identifier == certId { return true }
+                return false
+            }) ?? allCerts.first else {
+                debugLog("[SideSign] addCertificate error: Failed to retrieve new certificate from Developer Portal")
+                throw ServerError.badServerResponse(reason: "Failed to retrieve new certificate from Developer Portal", jsonPayload: "")
+            }
+            cert = matchedCert
         }
 
         debugLog("[SideSign] addCertificate succeeded")

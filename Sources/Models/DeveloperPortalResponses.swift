@@ -93,6 +93,25 @@ struct X509CertificateDetails: Decodable, Sendable {
     let machineName: String?
     let machineId: String?
     let requesterEmail: String?
+    let serialNumber: String?
+
+    enum CodingKeys: String, CodingKey {
+        case certificateId, certRequestId, certContent, name, machineName, machineId, requesterEmail
+        case serialNumber, serialNum
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.certificateId = try container.decodeIfPresent(String.self, forKey: .certificateId)
+        self.certRequestId = try container.decodeIfPresent(String.self, forKey: .certRequestId)
+        self.certContent = try container.decodeIfPresent(Data.self, forKey: .certContent)
+        self.name = try container.decodeIfPresent(String.self, forKey: .name)
+        self.machineName = try container.decodeIfPresent(String.self, forKey: .machineName)
+        self.machineId = try container.decodeIfPresent(String.self, forKey: .machineId)
+        self.requesterEmail = try container.decodeIfPresent(String.self, forKey: .requesterEmail)
+        self.serialNumber = try container.decodeIfPresent(String.self, forKey: .serialNumber)
+                             ?? container.decodeIfPresent(String.self, forKey: .serialNum)
+    }
 
     func toCertificate() -> X509Certificate? {
         guard let certContent else { return nil }

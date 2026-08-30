@@ -185,7 +185,7 @@ public extension DeveloperPortal {
         verboseLog("[SideSign] Authentication status type: \(authType ?? "nil")")
 
         switch authType {
-        case "trustedDeviceSecondaryAuth":
+        case "trustedDeviceSecondaryAuth", "trustedDevice":
             guard let verificationHandler else {
                 debugLog("[SideSign] Trusted device 2FA required but no verificationHandler provided")
                 throw DeveloperPortalError.requiresTwoFactorAuthentication
@@ -193,13 +193,25 @@ public extension DeveloperPortal {
             try await requestTrustedDeviceTwoFactorCode(dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
             return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
 
-        case "secondaryAuth":
+        case _ where authType.flatMap(Constants.SecondaryAuthType.init) != nil:
             guard let verificationHandler else {
-                debugLog("[SideSign] SMS 2FA required but no verificationHandler provided")
+                debugLog("[SideSign] Secondary 2FA required but no verificationHandler provided")
                 throw DeveloperPortalError.requiresTwoFactorAuthentication
             }
-            try await requestSMSTwoFactorCode(dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
+            let secondaryType = authType.flatMap(Constants.SecondaryAuthType.init)
+            let requestedMode = (secondaryType == .voice) ? Constants.SecondaryAuthType.voice.rawValue : Constants.SecondaryAuthType.sms.rawValue
+            try await requestSMSTwoFactorCode(mode: requestedMode, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
             return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
+
+        case "repair":
+            let repairURLString = (completeResponseDictionary["repairUrl"] as? String)
+                ?? (completeResponseDictionary["url"] as? String)
+                ?? ((completeResponseDictionary["Status"] as? [String: any Sendable])?["url"] as? String)
+            let repairURL = repairURLString.flatMap { URL(string: $0) } ?? Constants.URLs.developerAccount
+            let message = ((completeResponseDictionary["Status"] as? [String: any Sendable])?["em"] as? String)
+                ?? Constants.defaultAccountRepairMessage
+            debugLog("[SideSign] Account repair required: \(message) (url: \(repairURL.absoluteString))")
+            throw DeveloperPortalError.accountRepairRequired(url: repairURL, message: message)
 
         default:
             guard let sessionKey = decryptedDictionary["sk"] as? Data else {
@@ -373,7 +385,7 @@ public extension DeveloperPortal {
 
         debugLog("[SideSign] Prompting user for 2FA code via verificationHandler...")
         let code: String = try await withCheckedThrowingContinuation { continuation in
-            verificationHandler { enteredCode in
+            verificationHandler(.trustedDevice) { enteredCode in
                 if let enteredCode {
                     debugLog("[SideSign] User entered 2FA code.")
                     continuation.resume(returning: enteredCode)
@@ -411,54 +423,81 @@ public extension DeveloperPortal {
         debugLog("[SideSign] Trusted device 2FA code verified successfully!")
     }
 
-    private func requestSMSTwoFactorCode(dsid: String,
+    private func requestSMSTwoFactorCode(mode requestedMode: String = "sms",
+                                         dsid: String,
                                          idmsToken: String,
                                          anisetteData: AnisetteData,
                                          xcodeVersion: String,
                                          verificationHandler: VerificationHandler) async throws
     {
-        debugLog("[SideSign] Requesting SMS 2FA code...")
-        verboseLog("[SideSign] requestSMSTwoFactorCode for dsid: \(dsid)")
+        debugLog("[SideSign] Requesting secondary/phone 2FA code (mode: \(requestedMode))...")
+        verboseLog("[SideSign] requestSMSTwoFactorCode for dsid: \(dsid), requestedMode: \(requestedMode)")
 
-        var request = makeTwoFactorRequest(url: Constants.URLs.smsPut, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion)
+        var request = makeTwoFactorRequest(url: Constants.URLs.phonePutURL(mode: requestedMode), dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion)
         request.httpMethod = "POST"
-        request.httpBody = try PropertyListSerialization.data(fromPropertyList: ["serverInfo": ["phoneNumber.id": "1"]], format: .xml, options: 0)
+        request.httpBody = try PropertyListSerialization.data(fromPropertyList: [
+            "serverInfo": [
+                "mode": requestedMode,
+                "phoneNumber.id": "1"
+            ]
+        ], format: .xml, options: 0)
 
-        let (_, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request)
         let httpResponse = response as? HTTPURLResponse
         let statusCode = httpResponse?.statusCode ?? 0
 
-        debugLog("[SideSign] Prompting user for SMS 2FA code via verificationHandler (request status: \(statusCode))...")
+        let responseDict = parsePlistOrJSON(data)
+        let phoneDict = (responseDict?["phoneNumber"] as? [String: any Sendable])
+            ?? ((responseDict?["phoneNumbers"] as? [[String: any Sendable]])?.first)
+        let phoneID = (phoneDict?["id"] as? CustomStringConvertible)?.description ?? "1"
+        let activeMode = (phoneDict?["mode"] as? String) ?? requestedMode
+        let twoFactorMode: TwoFactorMode = (activeMode == "voice") ? .voice : .sms
+
+        debugLog("[SideSign] Prompting user for 2FA code via verificationHandler (request status: \(statusCode), phoneId: \(phoneID), mode: \(activeMode))...")
         let code: String = try await withCheckedThrowingContinuation { continuation in
-            verificationHandler { enteredCode in
+            verificationHandler(twoFactorMode) { enteredCode in
                 if let enteredCode, !enteredCode.isEmpty {
-                    debugLog("[SideSign] User entered SMS 2FA code.")
+                    debugLog("[SideSign] User entered 2FA code.")
                     continuation.resume(returning: enteredCode)
                 } else {
-                    debugLog("[SideSign] User cancelled SMS 2FA code entry.")
+                    debugLog("[SideSign] User cancelled 2FA code entry.")
                     continuation.resume(throwing: DeveloperPortalError.requiresTwoFactorAuthentication)
                 }
             }
         }
 
-        var verifyRequest = makeTwoFactorRequest(url: Constants.URLs.smsSecurityCode, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion)
+        var verifyRequest = makeTwoFactorRequest(url: Constants.URLs.phoneSecurityCode, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion)
         verifyRequest.httpMethod = "POST"
         verifyRequest.httpBody = try PropertyListSerialization.data(fromPropertyList: [
             "securityCode.code": code,
-            "serverInfo": ["mode": "sms", "phoneNumber.id": "1"]
+            "serverInfo": ["mode": activeMode, "phoneNumber.id": phoneID]
         ], format: .xml, options: 0)
 
-        debugLog("[SideSign] Verifying SMS security code...")
-        let (_, verifyResponse) = try await session.data(for: verifyRequest)
+        debugLog("[SideSign] Verifying secondary security code...")
+        let (verifyData, verifyResponse) = try await session.data(for: verifyRequest)
+
+        if let verifyDict = parsePlistOrJSON(verifyData) {
+            let errorCode = verifyDict["ec"] as? Int ?? 0
+            if errorCode == GrandSlamAuthErrorCodes.incorrectVerificationCode {
+                let errorMsg = (verifyDict["em"] as? String) ?? "Incorrect verification code"
+                debugLog("[SideSign] Incorrect 2FA verification code (\(errorCode)): \(errorMsg)")
+                throw DeveloperPortalError.incorrectVerificationCode(cause: errorMsg)
+            } else if errorCode != 0 {
+                let errorMsg = (verifyDict["em"] as? String) ?? "2FA verification error"
+                debugLog("[SideSign] 2FA verification error (\(errorCode)): \(errorMsg)")
+                throw ServerError.underlyingError(code: errorCode, message: errorMsg)
+            }
+        }
+
         guard let verifyHttpResponse = verifyResponse as? HTTPURLResponse,
               verifyHttpResponse.statusCode == HTTPStatusCodes.ok,
               verifyHttpResponse.allHeaderFields.keys.contains(where: { ($0 as? String)?.lowercased() == "x-apple-pe-token" })
         else {
-            debugLog("[SideSign] SMS code verification failed (missing PE token or status != \(HTTPStatusCodes.ok))")
+            debugLog("[SideSign] Secondary code verification failed (missing PE token or status != \(HTTPStatusCodes.ok))")
             throw DeveloperPortalError.incorrectVerificationCode(cause: "Missing PE token or status != \(HTTPStatusCodes.ok)")
         }
 
-        debugLog("[SideSign] SMS 2FA code verified successfully!")
+        debugLog("[SideSign] Secondary 2FA code verified successfully!")
     }
 
     private func makeTwoFactorRequest(url: URL,

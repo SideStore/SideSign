@@ -19,11 +19,14 @@ enum Constants {
     static let userAgent               = "AuthKit/1 (Macintosh; OS X 26.6) (com.apple.dt.Xcode/26.0)"
     static let xcodeUserAgent          = "Xcode"
     static let authApp                 = "com.apple.gs.xcode.auth"
+    static let defaultAccountRepairMessage = "Your Apple ID requires account verification or terms agreement.\n" + 
+                                             "Please sign in to developer.apple.com or appleid.apple.com."
 
     enum URLs {
         private static let servicesBase      = "https://developerservices2.apple.com/services/\(Constants.protocolVersion)"
 
         // Auth
+        static let developerAccount          = URL(string: "https://developer.apple.com/account")!
         static let developerServicesBase     = URL(string: "\(servicesBase)/")!
         static let developerServicesV1Base   = URL(string: "https://developerservices2.apple.com/services/\(Constants.servicesProtocolVersion)/")!
         static let appStoreConnectBase       = URL(string: "https://appstoreconnect.apple.com/iris/\(Constants.servicesProtocolVersion)/")!
@@ -31,6 +34,11 @@ enum Constants {
         static let grandSlamValidate         = URL(string: "https://gsa.apple.com/grandslam/GsService2/validate")!
         static let trustedDevice             = URL(string: "https://gsa.apple.com/auth/verify/trusteddevice")!
         static let trustedDeviceSecurityCode = URL(string: "https://gsa.apple.com/auth/verify/trusteddevice/securitycode")!
+        static let phoneBase                 = "https://gsa.apple.com/auth/verify/phone"
+        static func phonePutURL(mode: String = "sms") -> URL {
+            URL(string: "\(phoneBase)/put?mode=\(mode)") ?? smsPut
+        }
+        static let phoneSecurityCode         = URL(string: "\(phoneBase)/securitycode?referrer=/auth/verify/phone/put")!
         static let smsPut                    = URL(string: "https://gsa.apple.com/auth/verify/phone/put?mode=sms")!
         static let smsSecurityCode           = URL(string: "https://gsa.apple.com/auth/verify/phone/securitycode?referrer=/auth/verify/phone/put")!
 
@@ -57,6 +65,13 @@ enum Constants {
         static let listProvisioningProfiles    = URL(string: "\(servicesBase)/ios/listProvisioningProfiles.action")!
         static let downloadProvisioningProfile = URL(string: "\(servicesBase)/ios/downloadTeamProvisioningProfile.action")!
         static let deleteProvisioningProfile   = URL(string: "\(servicesBase)/ios/deleteProvisioningProfile.action")!
+    }
+
+    enum SecondaryAuthType: String, Sendable, CaseIterable {
+        case secondaryAuth = "secondaryAuth"
+        case sms           = "sms"
+        case voice         = "voice"
+        case phone         = "phone"
     }
 }
 

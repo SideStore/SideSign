@@ -32,6 +32,7 @@ public enum DeveloperPortalError: Error, LocalizedError, Sendable {
     case authenticationHandshakeFailed(cause: String)
     case invalidAnisetteData(cause: String)
     case tooManyCertificates(cause: String)
+    case accountRepairRequired(url: URL?, message: String)
 
     public var errorDescription: String? {
         switch self {
@@ -58,6 +59,7 @@ public enum DeveloperPortalError: Error, LocalizedError, Sendable {
         case .authenticationHandshakeFailed(let cause):         return "Authentication handshake failed: \(cause)"
         case .invalidAnisetteData(let cause):                   return "Invalid anisette data: \(cause)"
         case .tooManyCertificates(let cause):                   return "Maximum number of certificates reached: \(cause)"
+        case .accountRepairRequired(_, let message):            return message
         }
     }
 }

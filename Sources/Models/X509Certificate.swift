@@ -76,27 +76,4 @@ public extension X509Certificate {
         if let machineIdentifier { self.machineIdentifier = machineIdentifier }
         if let requesterEmail { self.requesterEmail = requesterEmail }
     }
-
-    init(
-        name: String,
-        serialNumber: String,
-        data: Data? = nil,
-        creationDate: Date = .distantPast,
-        expiryDate: Date = .distantPast,
-        identifier: String? = nil,
-        machineName: String? = nil,
-        machineIdentifier: String? = nil,
-        requesterEmail: String? = nil
-    ) {
-        if let data, let cert = X509Certificate(data: data, identifier: identifier, machineName: machineName, machineIdentifier: machineIdentifier, requesterEmail: requesterEmail) {
-            self = cert
-        } else {
-            var cert = X509Certificate(der: data ?? Data([0x30, 0x06, 0x30, 0x04, 0x02, 0x01, 0x00, 0x00])) ?? X509Certificate(der: Data())!
-            if let identifier { cert.identifier = identifier }
-            if let machineName { cert.machineName = machineName }
-            if let machineIdentifier { cert.machineIdentifier = machineIdentifier }
-            if let requesterEmail { cert.requesterEmail = requesterEmail }
-            self = cert
-        }
-    }
 }

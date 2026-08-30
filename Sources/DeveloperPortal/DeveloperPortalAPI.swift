@@ -9,8 +9,14 @@
 import Foundation
 import CodeSignKit
 
+public enum TwoFactorMode: String, Sendable {
+    case trustedDevice
+    case sms
+    case voice
+}
+
 public extension DeveloperPortal {
-    typealias VerificationHandler = @Sendable (@escaping @Sendable (String?) -> Void) -> Void
+    typealias VerificationHandler = @Sendable (TwoFactorMode, @escaping @Sendable (String?) -> Void) -> Void
 }
 
 public protocol DeveloperPortalAPI: Sendable {
