@@ -238,8 +238,18 @@ public actor AnisetteDataProvider {
         if let base = baseDirectory {
             self.baseAnisetteDirectory = base
         } else {
-            let homeDir = FileManager.default.homeDirectoryForCurrentUser
+            #if os(macOS)
+            let homeDir = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
             self.baseAnisetteDirectory = homeDir.appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
+            #elseif os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
+            if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                self.baseAnisetteDirectory = appSupport.appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
+            } else {
+                self.baseAnisetteDirectory = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
+            }
+            #else
+            self.baseAnisetteDirectory = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
+            #endif
         }
     }
 
