@@ -130,10 +130,10 @@ public extension DeveloperPortal {
             throw ServerError.missingKey(key: "spd", jsonPayload: payload)
         }
 
-        guard let serverVerificationMessage = completeResponseDictionary["m2"] as? Data else {
+        guard let serverVerificationMessage = completeResponseDictionary["M2"] as? Data else {
             let payload = prettyJSONString(from: completeResponseDictionary)
-            debugLog("[SideSign] Missing server verification message 'm2' in auth complete response: \(payload)")
-            throw ServerError.missingKey(key: "m2", jsonPayload: payload)
+            debugLog("[SideSign] Missing server verification message 'M2' in auth complete response: \(payload)")
+            throw ServerError.missingKey(key: "M2", jsonPayload: payload)
         }
 
         verboseLog("""
@@ -152,19 +152,12 @@ public extension DeveloperPortal {
             throw DeveloperPortalError.authenticationHandshakeFailed(cause: "Missing session key")
         }
 
-        guard encryptedData.count > 35 else {
-            debugLog("[SideSign] Encrypted SPD payload is too short (length: \(encryptedData.count))")
-            throw DeveloperPortalError.authenticationHandshakeFailed(cause: "Encrypted SPD payload is too short")
-        }
-
-        let aad = Data(encryptedData[..<3])
-        let nonce = Data(encryptedData[3..<19])
-        let ciphertext = Data(encryptedData[19..<(encryptedData.count - 16)])
-        let tag = Data(encryptedData[(encryptedData.count - 16)...])
-
-        guard let decryptedData = CryptoUtilities.aesGCMDecrypt(key: sharedSecret, nonce: nonce, aad: aad, ciphertext: ciphertext, tag: tag) else {
+        guard let spdKey = CryptoUtilities.hmacSHA256(key: sharedSecret, strings: ["extra data key:"]),
+              let spdIV = CryptoUtilities.hmacSHA256(key: sharedSecret, strings: ["extra data iv:"]),
+              let decryptedData = CryptoUtilities.aesCBCDecrypt(key: spdKey, iv: spdIV, ciphertext: encryptedData)
+        else {
             debugLog("[SideSign] Decryption of SPD payload failed")
-            throw DeveloperPortalError.authenticationHandshakeFailed(cause: "Failed to AES-GCM decrypt SPD payload")
+            throw DeveloperPortalError.authenticationHandshakeFailed(cause: "Failed to AES-CBC decrypt SPD payload")
         }
 
         guard let decryptedDictionary = parsePlistOrJSON(decryptedData) else {
