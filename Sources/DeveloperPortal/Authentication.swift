@@ -525,7 +525,7 @@ public extension DeveloperPortal {
         debugLog("[SideSign] Requesting secondary/phone 2FA code (mode: \(requestedMode), phoneID: \(requestedPhoneID ?? "auto"))...")
         verboseLog("[SideSign] sendPhonePut for dsid: \(dsid), requestedMode: \(requestedMode), phoneID: \(requestedPhoneID ?? "nil")")
 
-        var serverInfo: [String: any Sendable] = [
+        let serverInfo: [String: any Sendable] = [
             "mode": requestedMode,
             "phoneNumber.id": requestedPhoneID ?? "1"
         ]

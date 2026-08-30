@@ -140,12 +140,16 @@ func handleSign(args: [String]) async throws {
         if let profilePath = profilePath {
             let profURL = URL(fileURLWithPath: profilePath)
             let profData = try Data(contentsOf: profURL)
-            let profile = try ProvisioningProfile(data: profData)
-            profiles.append(profile)
+            if let profile = ProvisioningProfile(data: profData) {
+                profiles.append(profile)
+            } else {
+                print("Error: Could not parse provisioning profile at \(profilePath)")
+                exit(1)
+            }
         }
 
-        let effectiveTeamID = teamID ?? profiles.first?.teamIdentifier ?? keyStore.certificate.teamIdentifier ?? "UNKNOWN"
-        let team = Team(name: keyStore.certificate.organization ?? "Developer", identifier: effectiveTeamID, type: .free)
+        let effectiveTeamID = teamID ?? profiles.first?.teamIdentifier ?? keyStore.certificate.organizationalUnit ?? "UNKNOWN"
+        let team = Team(identifier: effectiveTeamID, name: keyStore.certificate.name, type: .free)
 
         print("[Sign] Signing App Bundle: \(appURL.lastPathComponent)")
         let signer = AppBundleSigner(team: team, keyStore: keyStore)
@@ -197,10 +201,10 @@ func handleSign(args: [String]) async throws {
             print("\(target): signed bundle successfully")
         } else {
             let binaryData = try Data(contentsOf: targetURL)
-            let cmsSigner = CMSSigner(p12Data: p12Data, password: password)
+            let cmsSigner = CodeSignKit.CMSSigner(p12Data: p12Data, password: password)
             let finalBundleID = bundleID ?? targetURL.lastPathComponent
 
-            let signer = MachOSigner(
+            let signer = CodeSignKit.MachOSigner(
                 binaryData: binaryData,
                 bundleIdentifier: finalBundleID,
                 teamIdentifier: teamID,
@@ -292,13 +296,15 @@ func handleDisplay(args: [String]) throws {
             exit(1)
         }
 
+        let executableName = app.bundle.infoDictionary?["CFBundleExecutable"] as? String ?? app.name
+
         print("========================================")
         print("App Bundle Information")
         print("========================================")
         print("Name:                \(app.name)")
         print("Bundle ID:           \(app.bundleIdentifier)")
         print("Version:             \(app.version)")
-        print("Executable:          \(app.executableName)")
+        print("Executable:          \(executableName)")
         print("App Extensions:      \(app.appExtensions.count)")
         for ext in app.appExtensions {
             print("  * \(ext.name) (\(ext.bundleIdentifier))")
@@ -307,13 +313,13 @@ func handleDisplay(args: [String]) throws {
         let profileURL = app.fileURL.appendingPathComponent("embedded.mobileprovision")
         if FileManager.default.fileExists(atPath: profileURL.path),
            let profData = try? Data(contentsOf: profileURL),
-           let profile = try? ProvisioningProfile(data: profData) {
+           let profile = ProvisioningProfile(data: profData) {
             print("\nEmbedded Provisioning Profile")
             print("Name:                \(profile.name)")
             print("Team:                \(profile.teamName) (\(profile.teamIdentifier))")
             print("Profile UUID:        \(profile.uuid)")
             print("Expiration:          \(profile.expirationDate)")
-            print("Devices:             \(profile.devices.count) registered")
+            print("Devices:             \(profile.deviceIDs.count) registered")
             if dumpEntitlements {
                 print("\nProfile Entitlements:")
                 for (k, v) in profile.entitlements {
@@ -384,7 +390,10 @@ func handleProfile(args: [String]) throws {
     let path = args[1]
     let fileURL = URL(fileURLWithPath: path)
     let data = try Data(contentsOf: fileURL)
-    let profile = try ProvisioningProfile(data: data)
+    guard let profile = ProvisioningProfile(data: data) else {
+        print("Error: Could not parse provisioning profile at \(path)")
+        exit(1)
+    }
 
     switch action {
     case "dump", "inspect":
@@ -401,8 +410,8 @@ func handleProfile(args: [String]) throws {
         for cert in profile.certificates {
             print("  * \(cert.commonName ?? "Certificate") [\(cert.serialNumber)]")
         }
-        print("Devices:             \(profile.devices.count)")
-        for dev in profile.devices {
+        print("Devices:             \(profile.deviceIDs.count)")
+        for dev in profile.deviceIDs {
             print("  * \(dev)")
         }
         print("\nEntitlements:")
@@ -556,11 +565,7 @@ func handleRemoveSignature(args: [String]) throws {
     }
     let targetURL = URL(fileURLWithPath: target)
     print("[Remove] Removing code signature from: \(targetURL.path)")
-    guard let parser = try? CodeSignKit.MachOParser(url: targetURL) else {
-        print("Error: Failed to parse binary at \(targetURL.path)")
-        exit(1)
-    }
-    try parser.removeSignature()
+    try CodeSignKit.CodeSigner.removeSignature(at: targetURL)
     print("Successfully removed code signature.")
 }
 
@@ -615,7 +620,7 @@ func handleAuth(args: [String]) async throws {
     print("Fetching Anisette data...")
     let anisetteData = try await fetchAnisette(from: anisetteURL)
 
-    let portal = DeveloperPortalAPI()
+    let portal = DeveloperPortal()
 
     print("Authenticating with Apple Developer Portal...")
     let session = try await portal.authenticate(
@@ -663,7 +668,7 @@ func handleAuth(args: [String]) async throws {
                 exit(1)
             }
             print("Registering device \(name) (\(udid))...")
-            let device = try await portal.registerDevice(name: name, identifier: udid, type: .iPhone, team: team, session: session)
+            let device = try await portal.registerDevice(name: name, identifier: udid, type: DeviceType.iPhone, team: team, session: session)
             print("Successfully registered device: \(device.name) (\(device.identifier))")
         } else {
             print("\nRegistered Devices for team '\(team.name)':")
@@ -741,21 +746,21 @@ func handleCLI2FA(mode: TwoFactorMode, completion: @escaping (TwoFactorAction) -
             print("\n[2FA] Verification Error: \(error)")
             print("Press [Enter] to retry code entry, or 'c' to cancel: ", terminator: "")
             if let input = readLine(strippingNewline: true), input.lowercased() == "c" {
-                completion(.cancel)
+                completion(TwoFactorAction.cancel)
                 return
             }
         }
         print("\nEnter 6-digit verification code from your Apple device (or 'p' for phone call/SMS, 'c' to cancel): ", terminator: "")
         guard let code = readLine(strippingNewline: true), !code.isEmpty else {
-            completion(.cancel)
+            completion(TwoFactorAction.cancel)
             return
         }
         if code.lowercased() == "c" {
-            completion(.cancel)
+            completion(TwoFactorAction.cancel)
         } else if code.lowercased() == "p" {
-            completion(.requestPhone(id: "1", mode: .sms))
+            completion(TwoFactorAction.requestPhone(id: "1", mode: TwoFactorDeliveryMode.sms))
         } else {
-            completion(.code(code))
+            completion(TwoFactorAction.code(code))
         }
 
     case .sms(let phoneNumbers, let activeID, let error):
@@ -763,24 +768,24 @@ func handleCLI2FA(mode: TwoFactorMode, completion: @escaping (TwoFactorAction) -
             print("\n[SMS] Verification Error: \(error)")
             print("Press [Enter] to retry code entry, or 'c' to cancel: ", terminator: "")
             if let input = readLine(strippingNewline: true), input.lowercased() == "c" {
-                completion(.cancel)
+                completion(TwoFactorAction.cancel)
                 return
             }
         }
         let activePhone = phoneNumbers.first(where: { $0.id == activeID })?.number ?? "phone"
         print("\nEnter 6-digit code sent via SMS to \(activePhone) (or 'v' for voice call, 'r' to resend, 'c' to cancel): ", terminator: "")
         guard let code = readLine(strippingNewline: true), !code.isEmpty else {
-            completion(.cancel)
+            completion(TwoFactorAction.cancel)
             return
         }
         if code.lowercased() == "c" {
-            completion(.cancel)
+            completion(TwoFactorAction.cancel)
         } else if code.lowercased() == "v" {
-            completion(.requestPhone(id: activeID, mode: .voice))
+            completion(TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.voice))
         } else if code.lowercased() == "r" {
-            completion(.requestPhone(id: activeID, mode: .sms))
+            completion(TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.sms))
         } else {
-            completion(.code(code))
+            completion(TwoFactorAction.code(code))
         }
 
     case .voice(let phoneNumbers, let activeID, let error):
@@ -788,24 +793,24 @@ func handleCLI2FA(mode: TwoFactorMode, completion: @escaping (TwoFactorAction) -
             print("\n[Voice] Verification Error: \(error)")
             print("Press [Enter] to retry code entry, or 'c' to cancel: ", terminator: "")
             if let input = readLine(strippingNewline: true), input.lowercased() == "c" {
-                completion(.cancel)
+                completion(TwoFactorAction.cancel)
                 return
             }
         }
         let activePhone = phoneNumbers.first(where: { $0.id == activeID })?.number ?? "phone"
         print("\nEnter 6-digit code from phone call to \(activePhone) (or 's' for SMS, 'r' to call again, 'c' to cancel): ", terminator: "")
         guard let code = readLine(strippingNewline: true), !code.isEmpty else {
-            completion(.cancel)
+            completion(TwoFactorAction.cancel)
             return
         }
         if code.lowercased() == "c" {
-            completion(.cancel)
+            completion(TwoFactorAction.cancel)
         } else if code.lowercased() == "s" {
-            completion(.requestPhone(id: activeID, mode: .sms))
+            completion(TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.sms))
         } else if code.lowercased() == "r" {
-            completion(.requestPhone(id: activeID, mode: .voice))
+            completion(TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.voice))
         } else {
-            completion(.code(code))
+            completion(TwoFactorAction.code(code))
         }
     }
 }
@@ -844,7 +849,7 @@ func fetchAnisette(from urlString: String?) async throws -> AnisetteData {
     if let urlStr = urlString, let url = URL(string: urlStr) {
         let (data, response) = try await URLSession.shared.data(from: url)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw ServerError.badServerResponse(reason: "Anisette server returned non-200", jsonPayload: nil)
+            throw ServerError.badServerResponse(reason: "Anisette server returned non-200", jsonPayload: "")
         }
         let json = try JSONSerialization.jsonObject(with: data) as? [String: String] ?? [:]
         guard let anisette = AnisetteData(json: json) else {
@@ -876,7 +881,7 @@ if args.isEmpty || args.contains("-h") || args.contains("--help") || args.contai
 }
 
 if args.contains("--verbose") || args.contains("-v") || args.contains("-vv") || args.contains("--debug") {
-    Logging.setLogging(true)
+    SideSignLogging.setLogging(true)
 }
 
 let command = args[0]

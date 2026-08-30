@@ -25,7 +25,7 @@ let package = Package(
         ),
         .executable(
             name: "sidesign",
-            targets: ["sidesign"]
+            targets: ["SideSignCLI"]
         ),
     ],
 
@@ -53,7 +53,7 @@ let package = Package(
             path: "Sources"
         ),
         .executableTarget(
-            name: "sidesign",
+            name: "SideSignCLI",
             dependencies: [
                 "SideSign",
                 "CodeSignKit",

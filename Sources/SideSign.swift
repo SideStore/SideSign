@@ -7,18 +7,6 @@
 //
 
 import Foundation
-import CodeSignKit
-import GSACryptoKit
-
-public enum SideSign {
-    public static var isLoggingEnabled: Bool {
-        return Logging.isLoggingEnabled
-    }
-
-    public static func setLogging(_ enabled: Bool) {
-        Logging.setLogging(enabled)
-    }
-}
 
 internal extension Data {
     func hexEncodedString() -> String {

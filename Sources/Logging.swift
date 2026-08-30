@@ -8,7 +8,7 @@
 
 import Foundation
 
-public enum Logging {
+public enum SideSignLogging {
     public private(set) nonisolated(unsafe) static var isLoggingEnabled = false
 
     public static func setLogging(_ enabled: Bool) {
@@ -39,7 +39,7 @@ public func debugLog(_ text: @autoclosure () -> String) {
 
 @inline(__always)
 public func verboseLog(_ text: @autoclosure () -> String) {
-    if Logging.isLoggingEnabled {
+    if SideSignLogging.isLoggingEnabled {
         let message = text()
         if !message.isEmpty && message.allSatisfy({ $0 == "\n" || $0 == "\r" }) {
             print(message, terminator: "")

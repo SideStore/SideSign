@@ -9,7 +9,8 @@
 import Foundation
 import CodeSignKit
 
-public typealias AltSign                    = SideSign
+public typealias AltSign                    = SideSignLogging
+public typealias ALTLogging                 = SideSignLogging
 public typealias ALTAccount                 = Account
 public typealias ALTTeam                    = Team
 public typealias ALTTeamType                = TeamType
