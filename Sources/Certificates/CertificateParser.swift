@@ -17,9 +17,9 @@ public enum CertificateParser {
         return data
     }
 
-    public static func extractX509(_ data: Data) -> CodeSignKit.X509Certificate? {
+    public static func extractX509(_ data: Data) -> X509Certificate? {
         guard let der = extractDER(data) else { return nil }
-        return CodeSignKit.X509Certificate(der: der)
+        return X509Certificate(der: der)
     }
 
     public static func parseCertificate(_ data: Data) -> (name: String, serial: String, creationDate: Date?, expiryDate: Date?)? {

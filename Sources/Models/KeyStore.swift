@@ -9,12 +9,22 @@
 import Foundation
 import CodeSignKit
 
+@dynamicMemberLookup
 public struct KeyStore: Sendable, Equatable, Hashable, Identifiable {
-    public var id: String { certificate.serialNumber }
+    public var id: String { certificate.serialNumberHex }
 
     public var certificate: X509Certificate
     public var privateKey: Data
     public var password: String?
+
+    public subscript<T>(dynamicMember keyPath: KeyPath<X509Certificate, T>) -> T {
+        certificate[keyPath: keyPath]
+    }
+
+    public subscript<T>(dynamicMember keyPath: WritableKeyPath<X509Certificate, T>) -> T {
+        get { certificate[keyPath: keyPath] }
+        set { certificate[keyPath: keyPath] = newValue }
+    }
 
     public init(
         certificate: X509Certificate,

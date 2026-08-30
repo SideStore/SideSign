@@ -94,12 +94,14 @@ struct X509CertificateDetails: Decodable, Sendable {
     let requesterEmail: String?
 
     func toCertificate() -> X509Certificate? {
-        guard let certContent, var cert = X509Certificate(data: certContent) else { return nil }
-        cert.identifier = certificateId ?? certRequestId
-        cert.machineName = machineName
-        cert.machineIdentifier = machineId
-        cert.requesterEmail = requesterEmail
-        return cert
+        guard let certContent else { return nil }
+        return X509Certificate(
+            data: certContent,
+            identifier: certificateId ?? certRequestId,
+            machineName: machineName,
+            machineIdentifier: machineId,
+            requesterEmail: requesterEmail
+        )
     }
 }
 
