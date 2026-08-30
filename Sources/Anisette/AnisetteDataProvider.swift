@@ -229,7 +229,7 @@ public actor AnisetteDataProvider {
     public static let cachingPollingDelayNanoseconds: UInt64 = 200_000_000
 
     public var activeMode: AnisetteMode?
-    public let baseAnisetteDirectory: URL
+    public nonisolated let baseAnisetteDirectory: URL
     private var localProvider: LocalAnisetteProvider?
     private var isCaching: Bool = false
 
@@ -245,10 +245,12 @@ public actor AnisetteDataProvider {
             if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
                 self.baseAnisetteDirectory = appSupport.appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
             } else {
-                self.baseAnisetteDirectory = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
+                self.baseAnisetteDirectory = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+                    .appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
             }
             #else
-            self.baseAnisetteDirectory = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
+            self.baseAnisetteDirectory = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+                .appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
             #endif
         }
     }
