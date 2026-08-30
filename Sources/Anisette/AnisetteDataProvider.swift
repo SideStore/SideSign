@@ -259,7 +259,46 @@ public actor AnisetteDataProvider {
         LocalAnisetteProvider.validateLibrariesExist(at: libsDir)
     }
 
-    public static func parseAnisetteData(from dictionary: [String: String]) throws -> AnisetteData {
+    public static func validateServer(url: URL, strict: Bool = false) async -> Bool {
+        let v3URL = url.appendingPathComponent("v3").appendingPathComponent("client_info")
+        var v3Req = URLRequest(url: v3URL)
+        v3Req.timeoutInterval = 3
+        v3Req.httpMethod = "GET"
+        v3Req.cachePolicy = .reloadIgnoringLocalCacheData
+
+        if let (data, response) = try? await URLSession.shared.data(for: v3Req),
+           let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) {
+            if !strict { return true }
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               json["client_info"] != nil || json["user_agent"] != nil {
+                return true
+            }
+        }
+
+        var rootReq = URLRequest(url: url)
+        rootReq.timeoutInterval = 3
+        rootReq.httpMethod = "GET"
+        rootReq.cachePolicy = .reloadIgnoringLocalCacheData
+
+        if let (data, response) = try? await URLSession.shared.data(for: rootReq),
+           let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) {
+            if !strict { return true }
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+               (try? parseAnisetteData(from: json)) != nil {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    public static func parseAnisetteData(
+        from dictionary: [String: String],
+        defaultDeviceID: String = UUID().uuidString,
+        defaultClientInfo: String = LocalAnisetteProvider.defaultClientInfo,
+        defaultLocale: Locale = .current,
+        defaultTimeZone: TimeZone = .current
+    ) throws -> AnisetteData {
         var map = [String: String]()
         for (k, v) in dictionary {
             map[k.lowercased()] = v
@@ -270,34 +309,42 @@ public actor AnisetteDataProvider {
             let otp = map["onetimepassword"] ?? map["x-apple-i-md"],
             let localUserID = map["localuserid"] ?? map["x-apple-i-md-lu"],
             let routingInfoString = map["routinginfo"] ?? map["x-apple-i-md-rinfo"],
-            let routingInfo = UInt64(routingInfoString),
-            let deviceUID = map["deviceuniqueidentifier"] ?? map["x-mme-device-id"],
-            let serial = map["deviceserialnumber"] ?? map["x-apple-i-srl-no"],
-            let desc = map["devicedescription"] ?? map["x-mme-client-info"],
-            let dateString = map["date"] ?? map["x-apple-i-client-time"],
-            let localeID = map["locale"] ?? map["x-apple-locale"],
-            let tzID = map["timezone"] ?? map["x-apple-i-timezone"]
+            let routingInfo = UInt64(routingInfoString)
         else {
             throw AnisetteError.invalidAnisetteData
         }
 
+        let serial = map["deviceserialnumber"] ?? map["x-apple-i-srl-no"] ?? "0"
+        let deviceUID = map["deviceuniqueidentifier"] ?? map["x-mme-device-id"] ?? defaultDeviceID
+        let desc = map["devicedescription"] ?? map["x-mme-client-info"] ?? defaultClientInfo
+
         let date: Date
-        if let isoDate = ISO8601DateFormatter().date(from: dateString) {
-            date = isoDate
-        } else {
-            let df = DateFormatter()
-            df.locale = Locale(identifier: "en_US_POSIX")
-            df.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
-            guard let altDate = df.date(from: dateString) else {
-                throw AnisetteError.invalidAnisetteData
+        if let dateString = map["date"] ?? map["x-apple-i-client-time"] {
+            if let isoDate = ISO8601DateFormatter().date(from: dateString) {
+                date = isoDate
+            } else {
+                let df = DateFormatter()
+                df.locale = Locale(identifier: "en_US_POSIX")
+                df.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+                date = df.date(from: dateString) ?? Date()
             }
-            date = altDate
+        } else {
+            date = Date()
         }
 
-        let cleanLocaleID = localeID.components(separatedBy: "@").first ?? localeID
-        let locale = Locale(identifier: cleanLocaleID)
-        guard let tz = TimeZone(abbreviation: tzID) ?? TimeZone(identifier: tzID) else {
-            throw AnisetteError.invalidAnisetteData
+        let locale: Locale
+        if let localeID = map["locale"] ?? map["x-apple-locale"] {
+            let cleanLocaleID = localeID.components(separatedBy: "@").first ?? localeID
+            locale = Locale(identifier: cleanLocaleID)
+        } else {
+            locale = defaultLocale
+        }
+
+        let tz: TimeZone
+        if let tzID = map["timezone"] ?? map["x-apple-i-timezone"] {
+            tz = TimeZone(abbreviation: tzID) ?? TimeZone(identifier: tzID) ?? defaultTimeZone
+        } else {
+            tz = defaultTimeZone
         }
 
         return AnisetteData(
@@ -346,8 +393,39 @@ public actor AnisetteDataProvider {
 
         switch resolvedMode {
         case .remote(let server):
+            let effectiveDeviceID = customDeviceID ?? identifier.uuidString
+
+            if let adiBlob = existingAdiBlob {
+                let v3HeadersURL = server.appendingPathComponent("v3").appendingPathComponent("get_headers")
+                var postReq = URLRequest(url: v3HeadersURL)
+                postReq.timeoutInterval = 15
+                postReq.httpMethod = "POST"
+                postReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                postReq.cachePolicy = .reloadIgnoringLocalCacheData
+                let payload: [String: String] = [
+                    "identifier": effectiveDeviceID,
+                    "adi_pb": adiBlob.base64EncodedString()
+                ]
+                if let bodyData = try? JSONSerialization.data(withJSONObject: payload) {
+                    postReq.httpBody = bodyData
+                    if let (data, response) = try? await URLSession.shared.data(for: postReq),
+                       let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode),
+                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+                       let anisette = try? Self.parseAnisetteData(
+                           from: json,
+                           defaultDeviceID: effectiveDeviceID,
+                           defaultClientInfo: clientInfo,
+                           defaultLocale: customLocale,
+                           defaultTimeZone: customTimeZone
+                       ) {
+                        return (anisette, nil)
+                    }
+                }
+            }
+
             var request = URLRequest(url: server)
             request.cachePolicy = .reloadIgnoringLocalCacheData
+            request.timeoutInterval = 15
             let (data, response) = try await URLSession.shared.data(for: request)
 
             guard let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) else {
@@ -360,7 +438,13 @@ public actor AnisetteDataProvider {
                 throw AnisetteError.invalidAnisetteData
             }
 
-            let anisette = try Self.parseAnisetteData(from: json)
+            let anisette = try Self.parseAnisetteData(
+                from: json,
+                defaultDeviceID: effectiveDeviceID,
+                defaultClientInfo: clientInfo,
+                defaultLocale: customLocale,
+                defaultTimeZone: customTimeZone
+            )
             return (anisette, nil)
 
         case .localODA(let libDir, let prov):

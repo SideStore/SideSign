@@ -629,6 +629,7 @@ func handleAuth(args: [String]) async throws {
     var localAnisetteDir: String?
     var odaURL: String?
     var selectServer = false
+    var strict = false
 
     var sourceURLStr: String?
 
@@ -649,6 +650,8 @@ func handleAuth(args: [String]) async throws {
             if i + 1 < args.count { sourceURLStr = args[i + 1]; i += 1 }
         } else if a == "--select-server" || a == "-s" {
             selectServer = true
+        } else if a == "--strict" {
+            strict = true
         }
         i += 1
     }
@@ -680,6 +683,13 @@ func handleAuth(args: [String]) async throws {
     } else if let odaStr = odaURL, let odaURL = URL(string: odaStr) {
         mode = .remoteODA(sourceURL: odaURL)
     } else if let sUrl = anisetteURL, let url = URL(string: sUrl) {
+        if strict {
+            let isValid = await AnisetteDataProvider.validateServer(url: url, strict: true)
+            guard isValid else {
+                print("Error: Strict validation failed for remote server '\(url.absoluteString)'. Endpoint is not ready or not returning valid Anisette payload.")
+                exit(1)
+            }
+        }
         mode = .remote(server: url)
     } else {
         print("Error: An Anisette mode is required. Specify one of:")
@@ -1215,11 +1225,13 @@ func handleAnisette(args: [String]) async throws {
     var anisetteDeviceUDID: String?
     var selectServer = false
     var asJSON = false
+    var strict = false
 
     var idx = 0
     while idx < args.count {
         let a = args[idx]
         if a == "--json" { asJSON = true }
+        else if a == "--strict" { strict = true }
         else if (a == "--local" || a == "--local-adi") && idx + 1 < args.count {
             localDir = args[idx + 1]
             idx += 1
@@ -1253,6 +1265,13 @@ func handleAnisette(args: [String]) async throws {
     } else if let odaStr = odaURL, let odaURL = URL(string: odaStr) {
         mode = .remoteODA(sourceURL: odaURL)
     } else if let sUrl = serverURL, let url = URL(string: sUrl) {
+        if strict {
+            let isValid = await AnisetteDataProvider.validateServer(url: url, strict: true)
+            guard isValid else {
+                print("Error: Strict validation failed for remote server '\(url.absoluteString)'. Endpoint is not ready or not returning valid Anisette payload.")
+                exit(1)
+            }
+        }
         mode = .remote(server: url)
     } else {
         print("Error: An Anisette mode is required. Specify one of:")
