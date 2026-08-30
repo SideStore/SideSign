@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import CodeSignKit
 
 public struct ProvisioningProfile: Sendable, Codable, Equatable, Hashable, Identifiable {
     public var id: String { uuid.uuidString }

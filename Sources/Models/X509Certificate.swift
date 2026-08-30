@@ -7,7 +7,7 @@
 //
 
 import Foundation
-import CodeSignKit
+@_exported import struct CodeSignKit.X509Certificate
 
 public extension X509Certificate {
     enum MetadataKey: String, Sendable, CaseIterable {
