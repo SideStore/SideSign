@@ -10,6 +10,7 @@ import Foundation
 import SideSign
 import CodeSignKit
 import GSACryptoKit
+import AnisetteKit
 
 extension DeviceType {
     var displayName: String {
@@ -25,20 +26,22 @@ extension DeviceType {
 
 func printUsage() {
     print("""
-    sidesign - Advanced App Signing, CodeSignKit, and Apple Developer Portal CLI for iOS, macOS, tvOS, visionOS, watchOS
+    sidesign - Advanced App Signing, CodeSignKit, and Apple Developer Portal CLI
 
     Usage:
       sidesign <command> [options]
 
     Commands:
       sign                  Sign an IPA, .app bundle, framework, dylib, or Mach-O binary
-      verify                Verify code signatures and integrity
+      verify                Verify code signatures and binary integrity
       display / inspect     Inspect signatures, entitlements, Mach-O slices, or bundle metadata
       profile               Inspect, dump, or validate .mobileprovision profiles
       extensions            List or remove App Extensions from an IPA or .app bundle
       archive               Unzip IPAs to .app bundles or repackage .app bundles to IPAs
       auth                  Apple ID authentication, 2FA, and Developer Portal operations
-      anisette              Generate Anisette headers from remote or local providers
+      anisette              Generate Anisette headers from remote or local ADI providers
+      p12                   Create or extract PKCS#12 (.p12) identity bundles
+      csr                   Generate Certificate Signing Requests (.csr) and RSA private keys
       remove-signature      Remove code signature from Mach-O binary or bundle
 
     Global Options:
@@ -50,20 +53,50 @@ func printUsage() {
       # Sign an IPA with P12 and Mobileprovision:
       sidesign sign app.ipa --p12 dev.p12 --password secret --profile dev.mobileprovision --output signed.ipa
 
-      # Inspect an App Bundle:
+      # Inspect an App Bundle or Mach-O Binary:
       sidesign inspect app.ipa --entitlements
 
-      # Dump Provisioning Profile info:
+      # Dump Provisioning Profile details:
       sidesign profile dump embedded.mobileprovision
 
-      # Remove extensions from an IPA to stay within active app limits:
+      # Remove extensions from an IPA:
       sidesign extensions remove app.ipa --all --output app_no_ext.ipa
 
       # Apple Developer Portal login & 2FA:
       sidesign auth login --apple-id developer@example.com
 
+      # Login with interactive Anisette server selection:
+      sidesign auth login --apple-id developer@example.com --select-server
+
+      # List available public Anisette servers:
+      sidesign anisette servers
+
+      # Interactively pick a server from the public list:
+      sidesign anisette --select-server
+
+      # Fetch Anisette headers via remote ODA package:
+      sidesign anisette --oda https://example.com/oda.json
+
       # Register a new device UDID:
       sidesign auth devices register --name "My iPhone" --udid <DEVICE_UDID> --apple-id developer@example.com
+
+      # Register an App ID:
+      sidesign auth appids register --name "MyApp" --bundle-id "com.example.myapp" --apple-id developer@example.com
+
+      # Create an App Group:
+      sidesign auth appgroups create --name "MyAppGroup" --group-id "group.com.example.myapp" --apple-id developer@example.com
+
+      # Download a Provisioning Profile:
+      sidesign auth profiles download --bundle-id "com.example.myapp" --output dev.mobileprovision --apple-id developer@example.com
+
+      # Generate a Certificate Signing Request:
+      sidesign csr create --name "John Doe" --org "My Org" --output-csr request.csr --output-key private.key
+
+      # Package Certificate + Key into P12:
+      sidesign p12 create --cert cert.der --key private.key --password secret --output dev.p12
+
+      # Generate Anisette headers using local ADI libraries:
+      sidesign anisette --local /path/to/adi/Libraries --json
     """)
 }
 
@@ -76,8 +109,6 @@ func handleSign(args: [String]) async throws {
     var teamID: String?
     var entitlementsPath: String?
     var outputPath: String?
-    var isDeep = true
-    var isForce = true
 
     var i = 0
     while i < args.count {
@@ -96,10 +127,6 @@ func handleSign(args: [String]) async throws {
             if i + 1 < args.count { entitlementsPath = args[i + 1]; i += 1 }
         } else if arg == "--output" || arg == "-o" {
             if i + 1 < args.count { outputPath = args[i + 1]; i += 1 }
-        } else if arg == "--deep" {
-            isDeep = true
-        } else if arg == "--force" || arg == "-f" {
-            isForce = true
         } else if !arg.hasPrefix("-") && targetPath == nil {
             targetPath = arg
         }
@@ -585,12 +612,13 @@ func handleAuth(args: [String]) async throws {
     guard !args.isEmpty else {
         print("""
         Usage:
-          sidesign auth login --apple-id <email> [--password <pwd>] [--anisette-url <url>]
+          sidesign auth login --apple-id <email> [--password <pwd>] [--anisette-url <url>] [--local-anisette <dir>]
           sidesign auth teams --apple-id <email>
           sidesign auth devices list / register --name <name> --udid <udid>
           sidesign auth certs list / create / revoke --id <id>
-          sidesign auth profiles list / fetch --bundle-id <id> --device <udid>
-          sidesign auth appids list / register --name <name> --bundle-id <id>
+          sidesign auth appids list / register --name <name> --bundle-id <id> / delete --id <id>
+          sidesign auth appgroups list / create --name <name> --group-id <id> / assign --app-id <id> --group-id <id>
+          sidesign auth profiles list / download --bundle-id <id> [--output <path>] / delete --id <id>
         """)
         exit(1)
     }
@@ -598,6 +626,11 @@ func handleAuth(args: [String]) async throws {
     var appleID: String?
     var password: String?
     var anisetteURL: String?
+    var localAnisetteDir: String?
+    var odaURL: String?
+    var selectServer = false
+
+    var sourceURLStr: String?
 
     var i = 0
     while i < args.count {
@@ -606,10 +639,22 @@ func handleAuth(args: [String]) async throws {
             if i + 1 < args.count { appleID = args[i + 1]; i += 1 }
         } else if a == "--password" || a == "-p" {
             if i + 1 < args.count { password = args[i + 1]; i += 1 }
-        } else if a == "--anisette-url" || a == "--anisette" {
+        } else if a == "--anisette-url" || a == "--anisette" || a == "--server" {
             if i + 1 < args.count { anisetteURL = args[i + 1]; i += 1 }
+        } else if a == "--local-anisette" || a == "--local-adi" || a == "--local" {
+            if i + 1 < args.count { localAnisetteDir = args[i + 1]; i += 1 }
+        } else if a == "--oda" {
+            if i + 1 < args.count { odaURL = args[i + 1]; i += 1 }
+        } else if a == "--source" || a == "--list" {
+            if i + 1 < args.count { sourceURLStr = args[i + 1]; i += 1 }
+        } else if a == "--select-server" || a == "-s" {
+            selectServer = true
         }
         i += 1
+    }
+
+    if selectServer {
+        anisetteURL = try await selectAnisetteServerInteractively(sourceURLString: sourceURLStr)
     }
 
     guard let email = appleID else {
@@ -629,8 +674,25 @@ func handleAuth(args: [String]) async throws {
         pwd = entered
     }
 
+    let mode: AnisetteMode
+    if let localDir = localAnisetteDir {
+        mode = .localODA(libsDir: URL(fileURLWithPath: localDir))
+    } else if let odaStr = odaURL, let odaURL = URL(string: odaStr) {
+        mode = .remoteODA(sourceURL: odaURL)
+    } else if let sUrl = anisetteURL, let url = URL(string: sUrl) {
+        mode = .remote(server: url)
+    } else {
+        print("Error: An Anisette mode is required. Specify one of:")
+        print("  --server <url>                 (Direct remote Anisette server)")
+        print("  --local <dir>                  (Local ADI library directory)")
+        print("  --oda <url>                    (Remote ODA package / catalog URL)")
+        print("  --select-server --source <url> (Select interactively from catalog)")
+        exit(1)
+    }
+
     print("Fetching Anisette data...")
-    let anisetteData = try await fetchAnisette(from: anisetteURL)
+    let provider = AnisetteDataProvider(mode: mode)
+    let (anisetteData, _) = try await provider.fetchAnisetteData()
 
     let portal = DeveloperPortal()
 
@@ -733,19 +795,154 @@ func handleAuth(args: [String]) async throws {
     case "appids":
         let teams = try await portal.fetchTeams(for: account, session: session)
         guard let team = teams.first else { return }
-        print("\nApp IDs for team '\(team.name)':")
-        let appIDs = try await portal.fetchAppIDs(for: team, session: session)
-        for a in appIDs {
-            print("  * \(a.name) [\(a.bundleIdentifier)] (ID: \(a.identifier))")
+        if args.contains("register") || args.contains("create") {
+            var name: String?
+            var bundleID: String?
+            var idx = 1
+            while idx < args.count {
+                if args[idx] == "--name" && idx + 1 < args.count { name = args[idx + 1]; idx += 1 }
+                if (args[idx] == "--bundle-id" || args[idx] == "-i") && idx + 1 < args.count { bundleID = args[idx + 1]; idx += 1 }
+                idx += 1
+            }
+            guard let name = name, let bundleID = bundleID else {
+                print("Usage: sidesign auth appids register --name <name> --bundle-id <bundle_id>")
+                exit(1)
+            }
+            print("Registering App ID '\(name)' (\(bundleID))...")
+            let appID = try await portal.addAppID(withName: name, bundleIdentifier: bundleID, team: team, session: session)
+            print("Successfully created App ID: \(appID.name) (\(appID.bundleIdentifier), ID: \(appID.identifier))")
+        } else if args.contains("delete") {
+            var targetID: String?
+            var idx = 1
+            while idx < args.count {
+                if args[idx] == "--id" && idx + 1 < args.count { targetID = args[idx + 1]; idx += 1 }
+                idx += 1
+            }
+            guard let targetID = targetID else {
+                print("Usage: sidesign auth appids delete --id <app_id>")
+                exit(1)
+            }
+            let appIDs = try await portal.fetchAppIDs(for: team, session: session)
+            if let target = appIDs.first(where: { $0.identifier == targetID || $0.bundleIdentifier == targetID }) {
+                _ = try await portal.deleteAppID(target, for: team, session: session)
+                print("Successfully deleted App ID: \(target.name) (\(target.bundleIdentifier))")
+            } else {
+                print("Error: App ID '\(targetID)' not found.")
+            }
+        } else {
+            print("\nApp IDs for team '\(team.name)':")
+            let appIDs = try await portal.fetchAppIDs(for: team, session: session)
+            for a in appIDs {
+                print("  * \(a.name) [\(a.bundleIdentifier)] (ID: \(a.identifier))")
+            }
+        }
+
+    case "appgroups":
+        let teams = try await portal.fetchTeams(for: account, session: session)
+        guard let team = teams.first else { return }
+        if args.contains("create") || args.contains("add") {
+            var name: String?
+            var groupID: String?
+            var idx = 1
+            while idx < args.count {
+                if args[idx] == "--name" && idx + 1 < args.count { name = args[idx + 1]; idx += 1 }
+                if args[idx] == "--group-id" && idx + 1 < args.count { groupID = args[idx + 1]; idx += 1 }
+                idx += 1
+            }
+            guard let name = name, let groupID = groupID else {
+                print("Usage: sidesign auth appgroups create --name <name> --group-id <group_id>")
+                exit(1)
+            }
+            print("Creating App Group '\(name)' (\(groupID))...")
+            let group = try await portal.addAppGroup(name: name, groupIdentifier: groupID, team: team, session: session)
+            print("Successfully created App Group: \(group.name) (\(group.identifier))")
+        } else if args.contains("assign") {
+            var appIDStr: String?
+            var groupIDStr: String?
+            var idx = 1
+            while idx < args.count {
+                if args[idx] == "--app-id" && idx + 1 < args.count { appIDStr = args[idx + 1]; idx += 1 }
+                if args[idx] == "--group-id" && idx + 1 < args.count { groupIDStr = args[idx + 1]; idx += 1 }
+                idx += 1
+            }
+            guard let appIDStr = appIDStr, let groupIDStr = groupIDStr else {
+                print("Usage: sidesign auth appgroups assign --app-id <app_id> --group-id <group_id>")
+                exit(1)
+            }
+            let appIDs = try await portal.fetchAppIDs(for: team, session: session)
+            guard let targetAppID = appIDs.first(where: { $0.identifier == appIDStr || $0.bundleIdentifier == appIDStr }) else {
+                print("Error: App ID '\(appIDStr)' not found.")
+                exit(1)
+            }
+            let groups = try await portal.fetchAppGroups(for: team, session: session)
+            guard let targetGroup = groups.first(where: { $0.identifier == groupIDStr || $0.groupID == groupIDStr }) else {
+                print("Error: App Group '\(groupIDStr)' not found.")
+                exit(1)
+            }
+            let updated = try await portal.assignAppGroups([targetGroup], to: targetAppID, team: team, session: session)
+            print("Successfully assigned group to App ID: \(updated.name)")
+        } else {
+            print("\nApp Groups for team '\(team.name)':")
+            let groups = try await portal.fetchAppGroups(for: team, session: session)
+            for g in groups {
+                print("  * \(g.name) [\(g.identifier)] (ID: \(g.groupID))")
+            }
         }
 
     case "profiles":
         let teams = try await portal.fetchTeams(for: account, session: session)
         guard let team = teams.first else { return }
-        print("\nProvisioning Profiles for team '\(team.name)':")
-        let profiles = try await portal.fetchProvisioningProfiles(for: team, session: session)
-        for p in profiles {
-            print("  * \(p.name) [BundleID: \(p.bundleIdentifier), UUID: \(p.uuid)]")
+        if args.contains("download") || args.contains("fetch") {
+            var bundleIDStr: String?
+            var outputPath: String?
+            var idx = 1
+            while idx < args.count {
+                if (args[idx] == "--bundle-id" || args[idx] == "-i") && idx + 1 < args.count { bundleIDStr = args[idx + 1]; idx += 1 }
+                if (args[idx] == "--output" || args[idx] == "-o") && idx + 1 < args.count { outputPath = args[idx + 1]; idx += 1 }
+                idx += 1
+            }
+            guard let bundleID = bundleIDStr else {
+                print("Usage: sidesign auth profiles download --bundle-id <bundle_id> [--output <path>]")
+                exit(1)
+            }
+            let appIDs = try await portal.fetchAppIDs(for: team, session: session)
+            guard let targetAppID = appIDs.first(where: { $0.bundleIdentifier == bundleID || $0.identifier == bundleID }) else {
+                print("Error: App ID '\(bundleID)' not found.")
+                exit(1)
+            }
+            print("Downloading Provisioning Profile for \(targetAppID.bundleIdentifier)...")
+            let profile = try await portal.downloadProvisioningProfile(for: targetAppID, deviceType: .iPhone, team: team, session: session)
+            if let out = outputPath {
+                let outURL = URL(fileURLWithPath: out)
+                try profile.data.write(to: outURL)
+                print("Profile saved to: \(outURL.path)")
+            } else {
+                print("Successfully downloaded profile: \(profile.name) (UUID: \(profile.uuid))")
+            }
+        } else if args.contains("delete") {
+            var profileID: String?
+            var idx = 1
+            while idx < args.count {
+                if args[idx] == "--id" && idx + 1 < args.count { profileID = args[idx + 1]; idx += 1 }
+                idx += 1
+            }
+            guard let profID = profileID else {
+                print("Usage: sidesign auth profiles delete --id <profile_id_or_uuid>")
+                exit(1)
+            }
+            let profiles = try await portal.fetchProvisioningProfiles(for: team, session: session)
+            if let target = profiles.first(where: { $0.identifier == profID || $0.uuid.uuidString == profID }) {
+                _ = try await portal.deleteProvisioningProfile(target, team: team, session: session)
+                print("Successfully deleted Provisioning Profile: \(target.name)")
+            } else {
+                print("Error: Provisioning Profile '\(profID)' not found.")
+            }
+        } else {
+            print("\nProvisioning Profiles for team '\(team.name)':")
+            let profiles = try await portal.fetchProvisioningProfiles(for: team, session: session)
+            for p in profiles {
+                print("  * \(p.name) [BundleID: \(p.bundleIdentifier), UUID: \(p.uuid)]")
+            }
         }
 
     default:
@@ -830,20 +1027,250 @@ func handleCLI2FA(mode: TwoFactorMode, completion: @escaping (TwoFactorAction) -
     }
 }
 
+func handleP12(args: [String]) throws {
+    guard args.count >= 1 else {
+        print("""
+        Usage:
+          sidesign p12 create --cert <cert.cer/der> --key <private.key> [--password <pwd>] --output <out.p12>
+          sidesign p12 extract --input <in.p12> [--password <pwd>] --output-cert <cert.der> --output-key <key.der>
+        """)
+        exit(1)
+    }
+
+    let action = args[0]
+    switch action {
+    case "create":
+        var certPath: String?
+        var keyPath: String?
+        var password: String?
+        var outputPath: String?
+
+        var idx = 1
+        while idx < args.count {
+            if args[idx] == "--cert" && idx + 1 < args.count { certPath = args[idx + 1]; idx += 1 }
+            if args[idx] == "--key" && idx + 1 < args.count { keyPath = args[idx + 1]; idx += 1 }
+            if (args[idx] == "--password" || args[idx] == "-p") && idx + 1 < args.count { password = args[idx + 1]; idx += 1 }
+            if (args[idx] == "--output" || args[idx] == "-o") && idx + 1 < args.count { outputPath = args[idx + 1]; idx += 1 }
+            idx += 1
+        }
+
+        guard let cert = certPath, let key = keyPath, let out = outputPath else {
+            print("Usage: sidesign p12 create --cert <cert.cer> --key <key.key> [--password <pwd>] --output <out.p12>")
+            exit(1)
+        }
+
+        let certData = try Data(contentsOf: URL(fileURLWithPath: cert))
+        let keyData = try Data(contentsOf: URL(fileURLWithPath: key))
+        let p12Data = try PKCS12Parser.create(cert: certData, key: keyData, password: password)
+        try p12Data.write(to: URL(fileURLWithPath: out))
+        print("Successfully created PKCS#12 bundle at: \(out)")
+
+    case "extract":
+        var inputPath: String?
+        var password: String?
+        var outCertPath: String?
+        var outKeyPath: String?
+
+        var idx = 1
+        while idx < args.count {
+            if (args[idx] == "--input" || args[idx] == "-i") && idx + 1 < args.count { inputPath = args[idx + 1]; idx += 1 }
+            if (args[idx] == "--password" || args[idx] == "-p") && idx + 1 < args.count { password = args[idx + 1]; idx += 1 }
+            if args[idx] == "--output-cert" && idx + 1 < args.count { outCertPath = args[idx + 1]; idx += 1 }
+            if args[idx] == "--output-key" && idx + 1 < args.count { outKeyPath = args[idx + 1]; idx += 1 }
+            idx += 1
+        }
+
+        guard let input = inputPath, let outCert = outCertPath, let outKey = outKeyPath else {
+            print("Usage: sidesign p12 extract --input <in.p12> [--password <pwd>] --output-cert <cert.der> --output-key <key.der>")
+            exit(1)
+        }
+
+        let p12Data = try Data(contentsOf: URL(fileURLWithPath: input))
+        let result = try PKCS12Parser.extract(p12Data, password: password)
+        try result.cert.write(to: URL(fileURLWithPath: outCert))
+        try result.key.write(to: URL(fileURLWithPath: outKey))
+        print("Successfully extracted certificate to \(outCert) and private key to \(outKey)")
+
+    default:
+        print("Unknown p12 action: \(action)")
+        exit(1)
+    }
+}
+
+func handleCSR(args: [String]) throws {
+    var commonName = "AltSign"
+    var org = "AltSign"
+    var country = "US"
+    var state = "CA"
+    var locality = "Los Angeles"
+    var outCSR: String?
+    var outKey: String?
+
+    var idx = 0
+    while idx < args.count {
+        let a = args[idx]
+        if a == "--name" || a == "-n" { if idx + 1 < args.count { commonName = args[idx + 1]; idx += 1 } }
+        else if a == "--org" || a == "-o" { if idx + 1 < args.count { org = args[idx + 1]; idx += 1 } }
+        else if a == "--country" || a == "-c" { if idx + 1 < args.count { country = args[idx + 1]; idx += 1 } }
+        else if a == "--state" { if idx + 1 < args.count { state = args[idx + 1]; idx += 1 } }
+        else if a == "--locality" { if idx + 1 < args.count { locality = args[idx + 1]; idx += 1 } }
+        else if a == "--output-csr" { if idx + 1 < args.count { outCSR = args[idx + 1]; idx += 1 } }
+        else if a == "--output-key" { if idx + 1 < args.count { outKey = args[idx + 1]; idx += 1 } }
+        idx += 1
+    }
+
+    guard let csrPath = outCSR, let keyPath = outKey else {
+        print("""
+        Usage:
+          sidesign csr create [--name <commonName>] [--org <org>] --output-csr <request.csr> --output-key <private.key>
+        """)
+        exit(1)
+    }
+
+    let subject = CodeSignKit.CSRSubject(
+        country: country,
+        state: state,
+        locality: locality,
+        organization: org,
+        commonName: commonName
+    )
+
+    let result = try CodeSignKit.CSRBuilder.generate(subject: subject)
+    try result.csrPEM.data(using: .utf8)?.write(to: URL(fileURLWithPath: csrPath))
+    try result.privateKeyPEM.data(using: .utf8)?.write(to: URL(fileURLWithPath: keyPath))
+    print("Successfully generated CSR at \(csrPath) and Private Key at \(keyPath)")
+}
+
+func selectAnisetteServerInteractively(sourceURLString: String? = nil) async throws -> String {
+    guard let sourceStr = sourceURLString, let url = URL(string: sourceStr) else {
+        print("Error: --source <url> (or --list <url>) is required for interactive server selection.")
+        exit(1)
+    }
+
+    print("Fetching available Anisette servers from \(url.host ?? url.absoluteString)...")
+    let provider = AnisetteDataProvider.shared
+    let data = try await provider.fetchServerList(from: url)
+
+    let visibleServers = data.servers.filter { !$0.isHidden }
+    guard !visibleServers.isEmpty else {
+        print("No servers found in server list.")
+        exit(1)
+    }
+
+    print("\nAvailable Anisette Servers:")
+    for (index, s) in visibleServers.enumerated() {
+        let label = s.name.isEmpty ? s.address : "\(s.name) (\(s.address))"
+        print("  [\(index + 1)] \(label)")
+    }
+
+    print("\nSelect a server [1-\(visibleServers.count)]: ", terminator: "")
+    guard let input = readLine(strippingNewline: true),
+          let choice = Int(input),
+          choice >= 1 && choice <= visibleServers.count else {
+        print("Invalid selection.")
+        exit(1)
+    }
+
+    let selected = visibleServers[choice - 1].address
+    print("Selected: \(selected)\n")
+    return selected
+}
+
 func handleAnisette(args: [String]) async throws {
+    if args.first == "servers" || args.first == "list" {
+        var sourceURLStr: String?
+        var idx = 1
+        while idx < args.count {
+            let a = args[idx]
+            if (a == "--source" || a == "--list" || a == "--url") && idx + 1 < args.count {
+                sourceURLStr = args[idx + 1]
+                idx += 1
+            } else if a.hasPrefix("http://") || a.hasPrefix("https://") {
+                sourceURLStr = a
+            }
+            idx += 1
+        }
+
+        guard let src = sourceURLStr, let url = URL(string: src) else {
+            print("Error: Server list URL is required. Usage: sidesign anisette servers --source <url>")
+            exit(1)
+        }
+
+        print("Fetching Anisette servers from \(url.absoluteString)...")
+        let provider = AnisetteDataProvider.shared
+        let data = try await provider.fetchServerList(from: url)
+
+        print("\nAnisette Servers (\(data.servers.count)):")
+        for s in data.servers {
+            let visibility = s.isHidden ? " [Hidden]" : ""
+            print("  * \(s.name.isEmpty ? "Server" : s.name): \(s.address)\(visibility)")
+        }
+        return
+    }
+
     var serverURL: String?
+    var localDir: String?
+    var odaURL: String?
+    var sourceURLStr: String?
+    var anisetteDeviceUDID: String?
+    var selectServer = false
     var asJSON = false
 
-    for a in args {
+    var idx = 0
+    while idx < args.count {
+        let a = args[idx]
         if a == "--json" { asJSON = true }
-        else if a.hasPrefix("http") { serverURL = a }
+        else if (a == "--local" || a == "--local-adi") && idx + 1 < args.count {
+            localDir = args[idx + 1]
+            idx += 1
+        } else if a == "--oda" && idx + 1 < args.count {
+            odaURL = args[idx + 1]
+            idx += 1
+        } else if (a == "--server" || a == "--url") && idx + 1 < args.count {
+            serverURL = args[idx + 1]
+            idx += 1
+        } else if (a == "--source" || a == "--list") && idx + 1 < args.count {
+            sourceURLStr = args[idx + 1]
+            idx += 1
+        } else if (a == "--anisette-device-udid" || a == "--anisette-udid") && idx + 1 < args.count {
+            anisetteDeviceUDID = args[idx + 1]
+            idx += 1
+        } else if a == "--select-server" || a == "-s" {
+            selectServer = true
+        } else if a.hasPrefix("http://") || a.hasPrefix("https://") {
+            serverURL = a
+        }
+        idx += 1
+    }
+
+    if selectServer {
+        serverURL = try await selectAnisetteServerInteractively(sourceURLString: sourceURLStr)
+    }
+
+    let mode: AnisetteMode
+    if let dir = localDir {
+        mode = .localODA(libsDir: URL(fileURLWithPath: dir))
+    } else if let odaStr = odaURL, let odaURL = URL(string: odaStr) {
+        mode = .remoteODA(sourceURL: odaURL)
+    } else if let sUrl = serverURL, let url = URL(string: sUrl) {
+        mode = .remote(server: url)
+    } else {
+        print("Error: An Anisette mode is required. Specify one of:")
+        print("  --server <url>                 (Direct remote Anisette server)")
+        print("  --local <dir>                  (Local ADI library directory)")
+        print("  --oda <url>                    (Remote ODA package / catalog URL)")
+        print("  --select-server --source <url> (Select interactively from catalog)")
+        exit(1)
     }
 
     print("Fetching Anisette data...")
-    let data = try await fetchAnisette(from: serverURL)
+    let provider = AnisetteDataProvider(mode: mode)
+    let identifier = (anisetteDeviceUDID != nil ? UUID(uuidString: anisetteDeviceUDID!) : nil) ?? UUID()
+    let (data, _) = try await provider.fetchAnisetteData(identifier: identifier, customDeviceID: anisetteDeviceUDID)
+
     if asJSON {
-        let jsonDict = data.json()
-        if let jsonData = try? JSONSerialization.data(withJSONObject: jsonDict, options: .prettyPrinted),
+        let headers = AnisetteDataProvider.toHTTPHeaders(data: data)
+        if let jsonData = try? JSONSerialization.data(withJSONObject: headers, options: .prettyPrinted),
            let str = String(data: jsonData, encoding: .utf8) {
             print(str)
         }
@@ -858,33 +1285,6 @@ func handleAnisette(args: [String]) async throws {
         print("Locale:                 \(data.locale.identifier)")
         print("TimeZone:               \(data.timeZone.identifier)")
     }
-}
-
-func fetchAnisette(from urlString: String?) async throws -> AnisetteData {
-    if let urlStr = urlString, let url = URL(string: urlStr) {
-        let (data, response) = try await URLSession.shared.data(from: url)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw ServerError.badServerResponse(reason: "Anisette server returned non-200", jsonPayload: "")
-        }
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: String] ?? [:]
-        guard let anisette = AnisetteData(json: json) else {
-            throw ServerError.invalidResponseFormat(rawPayload: String(data: data, encoding: .utf8) ?? "")
-        }
-        return anisette
-    }
-
-    return AnisetteData(
-        machineID: UUID().uuidString.uppercased(),
-        oneTimePassword: UUID().uuidString.uppercased(),
-        localUserID: UUID().uuidString.uppercased(),
-        routingInfo: 0x01,
-        deviceUniqueIdentifier: UUID().uuidString.uppercased(),
-        deviceSerialNumber: "0",
-        deviceDescription: "Mac",
-        date: Date(),
-        locale: Locale.current,
-        timeZone: TimeZone.current
-    )
 }
 
 // Top-level entry execution
@@ -918,6 +1318,10 @@ do {
         try handleArchive(args: subArgs)
     case "auth":
         try await handleAuth(args: subArgs)
+    case "p12":
+        try handleP12(args: subArgs)
+    case "csr":
+        try handleCSR(args: subArgs)
     case "anisette":
         try await handleAnisette(args: subArgs)
     case "remove-signature", "--remove-signature":

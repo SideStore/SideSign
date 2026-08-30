@@ -30,6 +30,8 @@ let package = Package(
     ],
 
     dependencies: [
+        .package(url: "https://github.com/apple/swift-crypto.git",    "4.0.0" ..< "5.0.0"),
+
         .package(url: "https://github.com/mahee96/CodeSignKit.git",   branch: "main"),
         .package(url: "https://github.com/mahee96/GSACryptoKit.git",  branch: "main"),
         .package(url: "https://github.com/SideStore/minizip-ng",      branch: "develop"),
@@ -46,6 +48,7 @@ let package = Package(
             name: "SideSign",
             dependencies: [
                 .product(name: "minizip-ng", package: "minizip-ng"),
+                .product(name: "Crypto", package: "swift-crypto"),
                 "AnisetteKit",
                 "CodeSignKit",
                 "GSACryptoKit"
@@ -57,7 +60,8 @@ let package = Package(
             dependencies: [
                 "SideSign",
                 "CodeSignKit",
-                "GSACryptoKit"
+                "GSACryptoKit",
+                "AnisetteKit"
             ],
             path: "CLI"
         ),
