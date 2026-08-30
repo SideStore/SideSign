@@ -23,6 +23,10 @@ let package = Package(
             type: .dynamic,
             targets: ["SideSign"]
         ),
+        .executable(
+            name: "sidesign",
+            targets: ["sidesign"]
+        ),
     ],
 
     dependencies: [
@@ -47,6 +51,15 @@ let package = Package(
                 "GSACryptoKit"
             ],
             path: "Sources"
+        ),
+        .executableTarget(
+            name: "sidesign",
+            dependencies: [
+                "SideSign",
+                "CodeSignKit",
+                "GSACryptoKit"
+            ],
+            path: "CLI"
         ),
         .testTarget(
             name: "SideSignTests",
