@@ -445,10 +445,11 @@ public extension DeveloperPortal {
             throw ServerError.badServerResponse(reason: "Trusted device request failed (HTTP \(statusCode))", jsonPayload: rawStr)
         }
 
+        var lastError: String? = nil
         while true {
-            debugLog("[SideSign] Prompting user for 2FA code via verificationHandler...")
+            debugLog("[SideSign] Prompting user for trusted device 2FA code (error: \(lastError ?? "nil"))...")
             let action: TwoFactorAction = try await withCheckedThrowingContinuation { continuation in
-                verificationHandler(.trustedDevice) { action in
+                verificationHandler(.trustedDevice(error: lastError)) { action in
                     continuation.resume(returning: action)
                 }
             }
@@ -464,9 +465,12 @@ public extension DeveloperPortal {
                 let verifyStatusCode = verifyHttpResponse?.statusCode ?? 0
 
                 let verifyDictionary = parsePlistOrJSON(verifyData)
+                let (xmluiTitle, xmluiMessage) = parseXMLUIAlertMessage(from: verifyData)
                 let errorCode = verifyDictionary?["ec"] as? Int ?? 0
                 let errorMsg = (verifyDictionary?["em"] as? String)
                     ?? ((verifyDictionary?["Status"] as? [String: any Sendable])?["em"] as? String)
+                    ?? xmluiMessage
+                    ?? xmluiTitle
 
                 if errorCode == GrandSlamAuthErrorCodes.tooManyAttempts 
                     || errorCode == GrandSlamAuthErrorCodes.tooManyCodesRequested 
@@ -477,8 +481,9 @@ public extension DeveloperPortal {
                     debugLog("[SideSign] Too many trusted device 2FA attempts (\(errorCode), HTTP \(verifyStatusCode)): \(msg)")
                     throw DeveloperPortalError.tooManyAttempts(cause: msg)
                 } else if errorCode == GrandSlamAuthErrorCodes.incorrectVerificationCode {
-                    let msg = errorMsg ?? "Incorrect verification code."
+                    let msg = errorMsg ?? "Incorrect verification code. Please try again."
                     debugLog("[SideSign] Incorrect 2FA verification code entered (\(errorCode), HTTP \(verifyStatusCode)): \(msg)")
+                    lastError = msg
                     continue
                 } else if errorCode != 0 {
                     let msg = errorMsg ?? "2FA verification failed"
@@ -490,7 +495,8 @@ public extension DeveloperPortal {
                     let rawStr = prettyJSONString(from: verifyData)
                     let reason = errorMsg ?? HTTPStatusCodes.localizedDescription(for: verifyStatusCode)
                     debugLog("[SideSign] Trusted device 2FA verification failed (HTTP \(verifyStatusCode)): \(reason) - body: \(rawStr)")
-                    throw ServerError.badServerResponse(reason: reason, jsonPayload: rawStr)
+                    lastError = reason
+                    continue
                 }
 
                 debugLog("[SideSign] Trusted device 2FA code verified successfully!")
@@ -607,13 +613,14 @@ public extension DeveloperPortal {
             xcodeVersion: xcodeVersion
         )
 
+        var lastError: String? = nil
         // keep trying as long as GSA allows us to do 
         while true {
             let twoFactorMode: TwoFactorMode = (activeMode == "voice")
-                ? .voice(phoneNumbers: phoneNumbers, activeID: phoneID)
-                : .sms(phoneNumbers: phoneNumbers, activeID: phoneID)
+                ? .voice(phoneNumbers: phoneNumbers, activeID: phoneID, error: lastError)
+                : .sms(phoneNumbers: phoneNumbers, activeID: phoneID, error: lastError)
 
-            debugLog("[SideSign] Prompting user for 2FA code via verificationHandler (request status: \(statusCode), phoneId: \(phoneID), mode: \(activeMode), phoneCount: \(phoneNumbers.count))...")
+            debugLog("[SideSign] Prompting user for 2FA code via verificationHandler (request status: \(statusCode), phoneId: \(phoneID), mode: \(activeMode), phoneCount: \(phoneNumbers.count), error: \(lastError ?? "nil"))...")
             let action: TwoFactorAction = try await withCheckedThrowingContinuation { continuation in
                 verificationHandler(twoFactorMode) { action in
                     continuation.resume(returning: action)
@@ -651,8 +658,9 @@ public extension DeveloperPortal {
                     debugLog("[SideSign] Too many 2FA attempts (\(errorCode), HTTP \(verifyStatusCode)): \(msg)")
                     throw DeveloperPortalError.tooManyAttempts(cause: msg)
                 } else if errorCode == GrandSlamAuthErrorCodes.incorrectVerificationCode {
-                    let msg = errorMsg ?? "Incorrect verification code"
+                    let msg = errorMsg ?? "Incorrect verification code. Please try again."
                     debugLog("[SideSign] Incorrect 2FA verification code (\(errorCode), HTTP \(verifyStatusCode)): \(msg)")
+                    lastError = msg
                     continue
                 } else if errorCode != 0 {
                     let msg = errorMsg ?? "2FA verification error"
@@ -664,13 +672,15 @@ public extension DeveloperPortal {
                     let rawStr = prettyJSONString(from: verifyData)
                     let reason = errorMsg ?? HTTPStatusCodes.localizedDescription(for: verifyStatusCode)
                     debugLog("[SideSign] Secondary code verification failed (HTTP \(verifyStatusCode)): \(reason) - body: \(rawStr)")
-                    throw ServerError.badServerResponse(reason: reason, jsonPayload: rawStr)
+                    lastError = reason
+                    continue
                 }
 
                 guard verifyHttpResponse?.allHeaderFields.keys.contains(where: { ($0 as? String)?.lowercased() == "x-apple-pe-token" }) == true else {
                     let rawStr = prettyJSONString(from: verifyData)
                     let reason = errorMsg ?? "Incorrect verification code or missing session token"
                     debugLog("[SideSign] Secondary code verification failed (HTTP \(HTTPStatusCodes.ok) missing PE token header): \(reason) - Body: \(rawStr)")
+                    lastError = reason
                     continue
                 }
 
@@ -678,6 +688,7 @@ public extension DeveloperPortal {
                 return
 
             case .requestPhone(let targetPhoneID, let deliveryMode):
+                lastError = nil
                 let requestedModeString = deliveryMode.rawValue
                 debugLog("[SideSign] User requested 2FA resend / change (phoneID: \(targetPhoneID), mode: \(requestedModeString))...")
                 currentMode = requestedModeString

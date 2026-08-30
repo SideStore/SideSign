@@ -25,9 +25,9 @@ public enum TwoFactorDeliveryMode: String, Sendable {
 }
 
 public enum TwoFactorMode: Sendable, Equatable {
-    case trustedDevice
-    case sms(phoneNumbers: [TrustedPhoneNumber], activeID: String)
-    case voice(phoneNumbers: [TrustedPhoneNumber], activeID: String)
+    case trustedDevice(error: String? = nil)
+    case sms(phoneNumbers: [TrustedPhoneNumber], activeID: String, error: String? = nil)
+    case voice(phoneNumbers: [TrustedPhoneNumber], activeID: String, error: String? = nil)
 }
 
 public enum TwoFactorAction: Sendable {
