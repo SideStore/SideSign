@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import CodeSignKit
 
 struct EmptyResponse: Decodable, Sendable {
     init() {}

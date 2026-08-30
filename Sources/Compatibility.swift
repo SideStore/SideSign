@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import CodeSignKit
 
 public typealias AltSign                    = SideSign
 public typealias ALTAccount                 = Account
