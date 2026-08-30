@@ -26,6 +26,16 @@ public struct KeyStore: Sendable, Equatable, Hashable, Identifiable {
         set { certificate[keyPath: keyPath] = newValue }
     }
 
+    public static func == (lhs: KeyStore, rhs: KeyStore) -> Bool {
+        lhs.certificate.serialNumberHex == rhs.certificate.serialNumberHex &&
+        lhs.privateKey == rhs.privateKey
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(certificate.serialNumberHex)
+        hasher.combine(privateKey)
+    }
+
     public init(
         certificate: X509Certificate,
         privateKey: Data,
