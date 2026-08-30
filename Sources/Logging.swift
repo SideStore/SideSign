@@ -9,7 +9,7 @@
 import Foundation
 
 public enum Logging {
-    public private(set) static var isLoggingEnabled = false
+    public private(set) nonisolated(unsafe) static var isLoggingEnabled = false
 
     public static func setLogging(_ enabled: Bool) {
         defer { debugLog("[SideSign] setLogging(\(enabled)) completed") }
