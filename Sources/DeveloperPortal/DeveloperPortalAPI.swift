@@ -270,9 +270,9 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
             headers["X-Apple-I-MD-RINFO"] = "\(a.routingInfo)"
             headers["X-Mme-Device-Id"] = a.deviceUniqueIdentifier
             headers["X-MMe-Client-Info"] = a.deviceDescription
-            headers["X-Apple-I-Client-Time"] = formatDate(a.date)
+            headers["X-Apple-I-Client-Time"] = formatDate(Date())
             headers["X-Apple-Locale"] = a.locale.identifier
-            headers["X-Apple-I-TimeZone"] = a.timeZone.abbreviation(for: a.date) ?? ""
+            headers["X-Apple-I-TimeZone"] = a.timeZone.abbreviation(for: Date()) ?? ""
         }
 
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
