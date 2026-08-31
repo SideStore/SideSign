@@ -24,6 +24,16 @@ public struct DeviceType: OptionSet, Sendable, Codable, Equatable, Hashable {
     public init(rawValue: Int) {
         self.rawValue = rawValue
     }
+
+    public var displayName: String {
+        if contains(.iPhone)        { return "iPhone" }
+        if contains(.iPad)          { return "iPad" }
+        if contains(.appleTV)       { return "Apple TV" }
+        if contains(.appleWatch)    { return "Apple Watch" }
+        if contains(.mac)           { return "Mac" }
+        if contains(.visionPro)     { return "Apple Vision Pro" }
+        return "Device"
+    }
 }
 
 public struct Device: Sendable, Codable, Equatable, Hashable, Identifiable {
