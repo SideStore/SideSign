@@ -5,8 +5,15 @@ on:
 
 jobs:
   build-macos:
-    name: Build macOS Universal Binary
+    name: Build macOS (${{ matrix.arch }})
     runs-on: macos-26
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            triple: arm64-apple-macosx
+          - arch: x86_64
+            triple: x86_64-apple-macosx
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,7 +27,7 @@ jobs:
             ~/Library/Developer/Xcode/DerivedData
             ~/Library/Caches/org.swift.swiftpm
             .build
-          key: spm-release-cache-${{ runner.os }}-${{ github.ref_name }}-${{ github.sha }}
+          key: spm-release-macos-${{ matrix.arch }}-${{ github.ref_name }}-${{ github.sha }}
 
       - name: Restore Cache (fallback)
         if: steps.spm-cache-exact.outputs.cache-hit != 'true'
@@ -31,9 +38,9 @@ jobs:
             ~/Library/Developer/Xcode/DerivedData
             ~/Library/Caches/org.swift.swiftpm
             .build
-          key: spm-release-cache-${{ runner.os }}-${{ github.ref_name }}-
+          key: spm-release-macos-${{ matrix.arch }}-${{ github.ref_name }}-
           restore-keys: |
-            spm-release-cache-${{ runner.os }}-
+            spm-release-macos-${{ matrix.arch }}-
 
       - name: Pre-populate Binary Artifacts
         run: |
@@ -50,13 +57,13 @@ jobs:
             curl -fsSL "https://github.com/mahee96/unicorn/releases/download/2.1.4-multiarch/Unicorn.xcframework.zip" -o "$UNICORN_FILE"
           fi
 
-      - name: Build macOS Universal Binary
+      - name: Build macOS Binary
         run: |
-          swift build -c release --arch arm64 --arch x86_64 --product sidesign
+          swift build -c release --triple ${{ matrix.triple }} --product sidesign
           mkdir -p dist
-          cp .build/apple/Products/Release/sidesign dist/
-          cd dist && tar -czvf ../sidesign-macos-universal.tar.gz sidesign && cd ..
-          shasum -a 256 sidesign-macos-universal.tar.gz > sidesign-macos-universal.tar.gz.sha256
+          cp .build/${{ matrix.triple }}/release/sidesign dist/
+          cd dist && tar -czvf ../sidesign-macos-${{ matrix.arch }}.tar.gz sidesign && cd ..
+          shasum -a 256 sidesign-macos-${{ matrix.arch }}.tar.gz > sidesign-macos-${{ matrix.arch }}.tar.gz.sha256
 
       - name: Save Cache
         if: steps.spm-cache-exact.outputs.cache-hit != 'true'
@@ -66,12 +73,12 @@ jobs:
             ~/Library/Developer/Xcode/DerivedData
             ~/Library/Caches/org.swift.swiftpm
             .build
-          key: spm-release-cache-${{ runner.os }}-${{ github.ref_name }}-${{ github.sha }}
+          key: spm-release-macos-${{ matrix.arch }}-${{ github.ref_name }}-${{ github.sha }}
 
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-assets
-          path: sidesign-macos-universal.tar.gz*
+          name: macos-assets-${{ matrix.arch }}
+          path: sidesign-macos-${{ matrix.arch }}.tar.gz*
 
   build-linux:
     name: Build Linux (${{ matrix.arch }})
