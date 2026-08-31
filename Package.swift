@@ -61,7 +61,8 @@ let package = Package(
                 "SideSign",
                 "CodeSignKit",
                 "GSACryptoKit",
-                "AnisetteKit"
+                "AnisetteKit",
+                .product(name: "Crypto", package: "swift-crypto")
             ],
             path: "CLI"
         ),
