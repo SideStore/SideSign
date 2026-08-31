@@ -258,11 +258,11 @@ jobs:
           # Ensure zlib headers and library (zlib.lib / z.lib) are present in C:\unicorn
           if (-not (Test-Path "C:\unicorn\lib\zlib.lib") -or -not (Test-Path "C:\unicorn\include\zlib.h")) {
             Write-Host "Installing zlib static library via vcpkg..."
-            vcpkg install zlib:x64-windows-static
-            Copy-Item "C:\vcpkg\installed\x64-windows-static\lib\zlib.lib" "C:\unicorn\lib\zlib.lib" -Force
-            Copy-Item "C:\vcpkg\installed\x64-windows-static\lib\zlib.lib" "C:\unicorn\lib\z.lib" -Force
-            Copy-Item "C:\vcpkg\installed\x64-windows-static\include\zlib.h" "C:\unicorn\include\zlib.h" -Force
-            Copy-Item "C:\vcpkg\installed\x64-windows-static\include\zconf.h" "C:\unicorn\include\zconf.h" -Force
+            vcpkg install zlib:x64-windows-static --x-install-root=C:\vcpkg_installed
+            Copy-Item "C:\vcpkg_installed\x64-windows-static\lib\*.lib" "C:\unicorn\lib\zlib.lib" -Force
+            Copy-Item "C:\vcpkg_installed\x64-windows-static\lib\*.lib" "C:\unicorn\lib\z.lib" -Force
+            Copy-Item "C:\vcpkg_installed\x64-windows-static\include\zlib.h" "C:\unicorn\include\zlib.h" -Force
+            Copy-Item "C:\vcpkg_installed\x64-windows-static\include\zconf.h" "C:\unicorn\include\zconf.h" -Force
           }
 
           if (Test-Path "C:\unicorn\include\zconf.h") {
