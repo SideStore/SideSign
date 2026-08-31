@@ -12,15 +12,78 @@ import CodeSignKit
 import GSACryptoKit
 import AnisetteKit
 
-extension DeviceType {
-    var displayName: String {
-        if contains(.iPhone) { return "iPhone" }
-        if contains(.iPad) { return "iPad" }
-        if contains(.appleTV) { return "Apple TV" }
-        if contains(.appleWatch) { return "Apple Watch" }
-        if contains(.mac) { return "Mac" }
-        if contains(.visionPro) { return "Apple Vision Pro" }
-        return "Device"
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#elseif canImport(WinSDK)
+import WinSDK
+import ucrt
+#endif
+
+func printError(_ message: String) {
+    FileHandle.standardError.write(Data("Error: \(message)\n".utf8))
+}
+
+func printWarning(_ message: String) {
+    FileHandle.standardError.write(Data("Warning: \(message)\n".utf8))
+}
+
+func isInteractiveTerminal() -> Bool {
+    #if os(Windows)
+    return _isatty(_fileno(__acrt_iob_func(0))) != 0
+    #else
+    return isatty(fileno(stdin)) != 0
+    #endif
+}
+
+func clearStdinBuffer() {
+    #if canImport(Darwin) || os(Linux)
+    if isInteractiveTerminal() {
+        tcflush(fileno(stdin), TCIFLUSH)
+    }
+    #endif
+}
+
+func readInteractiveLine(prompt: String, emptyLineBefore: Bool = true, emptyLineAfter: Bool = true) -> String? {
+    if isInteractiveTerminal() {
+        if emptyLineBefore { print() }
+        fflush(stdout)
+        clearStdinBuffer()
+        print(prompt, terminator: "")
+        fflush(stdout)
+        let line = readLine(strippingNewline: true)
+        if emptyLineAfter { print() }
+        return line
+    } else {
+        return readLine(strippingNewline: true)
+    }
+}
+
+func readSecurePassword(prompt: String, emptyLineBefore: Bool = true, emptyLineAfter: Bool = true) -> String? {
+    if isInteractiveTerminal() {
+        if emptyLineBefore { print() }
+        fflush(stdout)
+        clearStdinBuffer()
+        #if canImport(Darwin) || os(Linux)
+        if let passCStr = getpass(prompt) {
+            let passStr = String(cString: passCStr)
+            if emptyLineAfter { print() }
+            return passStr
+        }
+        if emptyLineAfter { print() }
+        return nil
+        #else
+        print(prompt, terminator: "")
+        fflush(stdout)
+        let input = readLine(strippingNewline: true)
+        if emptyLineAfter { print() }
+        return input
+        #endif
+    } else {
+        return readLine(strippingNewline: true)
     }
 }
 
@@ -134,25 +197,25 @@ func handleSign(args: [String]) async throws {
     }
 
     guard let target = targetPath else {
-        print("Error: No target IPA, .app, or binary specified.")
+        printError("No target IPA, .app, or binary specified.")
         exit(1)
     }
 
     let targetURL = URL(fileURLWithPath: target)
     var isDir: ObjCBool = false
     guard FileManager.default.fileExists(atPath: targetURL.path, isDirectory: &isDir) else {
-        print("Error: Target path does not exist: \(target)")
+        printError("Target path does not exist: \(target)")
         exit(1)
     }
 
     guard let p12 = p12Path else {
-        print("Error: P12 certificate is required for signing (--p12 <path>).")
+        printError("P12 certificate is required for signing (--p12 <path>).")
         exit(1)
     }
 
     let p12URL = URL(fileURLWithPath: p12)
     guard FileManager.default.fileExists(atPath: p12URL.path) else {
-        print("Error: P12 file does not exist: \(p12)")
+        printError("P12 file does not exist: \(p12)")
         exit(1)
     }
 
@@ -182,7 +245,7 @@ func handleSign(args: [String]) async throws {
             if let profile = ProvisioningProfile(data: profData) {
                 profiles.append(profile)
             } else {
-                print("Error: Could not parse provisioning profile at \(profilePath)")
+                printError("Could not parse provisioning profile at \(profilePath)")
                 exit(1)
             }
         }
@@ -276,7 +339,7 @@ func handleVerify(args: [String]) throws {
     }
 
     guard let target = targetPath else {
-        print("Error: No target specified for verification.")
+        printError("No target specified for verification.")
         exit(1)
     }
 
@@ -313,7 +376,7 @@ func handleDisplay(args: [String]) throws {
     }
 
     guard let target = targetPath else {
-        print("Error: No target specified for display/inspection.")
+        printError("No target specified for display/inspection.")
         exit(1)
     }
 
@@ -331,7 +394,7 @@ func handleDisplay(args: [String]) throws {
 
         let appURL = isIPA ? try FileManager.default.unzipAppBundle(at: targetURL, to: workingDir) : targetURL
         guard let app = AppBundle(fileURL: appURL) else {
-            print("Error: Unable to parse AppBundle at \(appURL.path)")
+            printError("Unable to parse AppBundle at \(appURL.path)")
             exit(1)
         }
 
@@ -370,7 +433,7 @@ func handleDisplay(args: [String]) throws {
         let execURL: URL
         if isDir.boolValue {
             guard let exec = CodeSignKit.MachOParser.findExecutable(at: targetURL) else {
-                print("Error: Could not find executable inside bundle \(target)")
+                printError("Could not find executable inside bundle \(target)")
                 exit(1)
             }
             execURL = exec
@@ -379,7 +442,7 @@ func handleDisplay(args: [String]) throws {
         }
 
         guard let parser = try? CodeSignKit.MachOParser(url: execURL) else {
-            print("Error: Failed to parse Mach-O binary at \(execURL.path)")
+            printError("Failed to parse Mach-O binary at \(execURL.path)")
             exit(1)
         }
 
@@ -430,7 +493,7 @@ func handleProfile(args: [String]) throws {
     let fileURL = URL(fileURLWithPath: path)
     let data = try Data(contentsOf: fileURL)
     guard let profile = ProvisioningProfile(data: data) else {
-        print("Error: Could not parse provisioning profile at \(path)")
+        printError("Could not parse provisioning profile at \(path)")
         exit(1)
     }
 
@@ -494,7 +557,7 @@ func handleExtensions(args: [String]) throws {
 
     let appURL = isIPA ? try FileManager.default.unzipAppBundle(at: targetURL, to: workingDir) : targetURL
     guard let app = AppBundle(fileURL: appURL) else {
-        print("Error: Failed to parse AppBundle at \(appURL.path)")
+        printError("Failed to parse AppBundle at \(appURL.path)")
         exit(1)
     }
 
@@ -612,19 +675,27 @@ func handleAuth(args: [String]) async throws {
     guard !args.isEmpty else {
         print("""
         Usage:
-          sidesign auth login --apple-id <email> [--password <pwd>] [--anisette-url <url>] [--local-anisette <dir>]
-          sidesign auth teams --apple-id <email>
-          sidesign auth devices list / register --name <name> --udid <udid>
-          sidesign auth certs list / create / revoke --id <id>
-          sidesign auth appids list / register --name <name> --bundle-id <id> / delete --id <id>
-          sidesign auth appgroups list / create --name <name> --group-id <id> / assign --app-id <id> --group-id <id>
-          sidesign auth profiles list / download --bundle-id <id> [--output <path>] / delete --id <id>
+          sidesign auth login --apple-id <email> [--password <pwd>] [--session <path>] [--encrypt-password <pwd>]
+          sidesign auth logout [--session <path>]
+          sidesign auth status [--session <path>] [--password <pwd>]
+          sidesign auth teams [--session <path>]
+          sidesign auth devices list / register --name <name> --udid <udid> [--session <path>]
+          sidesign auth certs list / create / revoke --id <id> [--session <path>]
+          sidesign auth appids list / register --name <name> --bundle-id <id> / delete --id <id> [--session <path>]
+          sidesign auth appgroups list / create --name <name> --group-id <id> / assign --app-id <id> --group-id <id> [--session <path>]
+          sidesign auth profiles list / download --bundle-id <id> [--output <path>] / delete --id <id> [--session <path>]
         """)
         exit(1)
     }
 
+    let action = args[0]
+
     var appleID: String?
     var password: String?
+    var sessionPath: String?
+    var encryptPassword: String?
+    var deviceDataPath: String?
+    var deviceDataPassword: String?
     var anisetteURL: String?
     var localAnisetteDir: String?
     var odaURL: String?
@@ -632,6 +703,8 @@ func handleAuth(args: [String]) async throws {
     var strict = false
 
     var sourceURLStr: String?
+    var enableFailover = false
+    var startIndex = 0
 
     var i = 0
     while i < args.count {
@@ -640,6 +713,14 @@ func handleAuth(args: [String]) async throws {
             if i + 1 < args.count { appleID = args[i + 1]; i += 1 }
         } else if a == "--password" || a == "-p" {
             if i + 1 < args.count { password = args[i + 1]; i += 1 }
+        } else if a == "--session" {
+            if i + 1 < args.count { sessionPath = args[i + 1]; i += 1 }
+        } else if a == "--encrypt-password" {
+            if i + 1 < args.count { encryptPassword = args[i + 1]; i += 1 }
+        } else if a == "--devicedata-password" || a == "--adi-password" {
+            if i + 1 < args.count { deviceDataPassword = args[i + 1]; i += 1 }
+        } else if a == "--devicedata-path" || a == "--adi-path" {
+            if i + 1 < args.count { deviceDataPath = args[i + 1]; i += 1 }
         } else if a == "--anisette-url" || a == "--anisette" || a == "--server" {
             if i + 1 < args.count { anisetteURL = args[i + 1]; i += 1 }
         } else if a == "--local-anisette" || a == "--local-adi" || a == "--local" {
@@ -650,35 +731,71 @@ func handleAuth(args: [String]) async throws {
             if i + 1 < args.count { sourceURLStr = args[i + 1]; i += 1 }
         } else if a == "--select-server" || a == "-s" {
             selectServer = true
+        } else if a == "--failover" || a == "--auto-failover" {
+            enableFailover = true
+        } else if a == "--start-index" {
+            if i + 1 < args.count, let idxVal = Int(args[i + 1]) { startIndex = idxVal; i += 1 }
         } else if a == "--strict" {
             strict = true
         }
         i += 1
     }
 
+    let sessionURL = sessionPath.map { URL(fileURLWithPath: $0) }
+
+    if action == "logout" {
+        let target = sessionURL ?? SessionManager.defaultSessionURL
+        try SessionManager.clear(at: target)
+        print("Logged out. Session cleared at \(target.path).")
+        return
+    }
+
+    if action == "status" {
+        let target = sessionURL ?? SessionManager.defaultSessionURL
+        guard SessionManager.hasSession(at: target) else {
+            printError("No active session found at '\(target.path)'. Please run: sidesign auth login --apple-id <email>")
+            exit(1)
+        }
+        let authSession: AuthSession
+        do {
+            authSession = try SessionManager.load(from: target, password: password ?? encryptPassword)
+        } catch SessionStorageError.invalidPassword {
+            guard let entered = readSecurePassword(prompt: "Enter session decryption password: "), !entered.isEmpty else {
+                printError("Password required to decrypt session.")
+                exit(1)
+            }
+            authSession = try SessionManager.load(from: target, password: entered)
+        }
+        print("Active Session:")
+        print("  Account Name: \(authSession.account.name)")
+        print("  Account DSID: \(authSession.account.identifier)")
+        print("  Session Path: \(target.path)")
+        return
+    }
+
+    let portal = DeveloperPortal()
+    let authSession: AuthSession
+
     if selectServer {
         anisetteURL = try await selectAnisetteServerInteractively(sourceURLString: sourceURLStr)
     }
 
-    guard let email = appleID else {
-        print("Error: --apple-id <email> is required.")
-        exit(1)
-    }
-
-    let pwd: String
-    if let p = password {
-        pwd = p
-    } else {
-        print("Enter password for \(email): ", terminator: "")
-        guard let entered = readLine(strippingNewline: true), !entered.isEmpty else {
-            print("Error: Password cannot be empty.")
+    var failoverURLs: [URL] = []
+    let mode: AnisetteMode
+    if enableFailover {
+        guard let sourceStr = sourceURLStr, let listURL = URL(string: sourceStr) else {
+            printError("--source <url> is required when using --failover.")
             exit(1)
         }
-        pwd = entered
-    }
-
-    let mode: AnisetteMode
-    if let localDir = localAnisetteDir {
+        let serverData = try await AnisetteDataProvider.shared.fetchServerList(from: listURL)
+        let visible = serverData.servers.filter { !$0.isHidden }
+        failoverURLs = visible.compactMap { URL(string: $0.address) }
+        guard !failoverURLs.isEmpty else {
+            printError("No active servers found in catalog '\(listURL.absoluteString)'.")
+            exit(1)
+        }
+        mode = .remote(server: failoverURLs.first!)
+    } else if let localDir = localAnisetteDir {
         mode = .localODA(libsDir: URL(fileURLWithPath: localDir))
     } else if let odaStr = odaURL, let odaURL = URL(string: odaStr) {
         mode = .remoteODA(sourceURL: odaURL)
@@ -686,59 +803,219 @@ func handleAuth(args: [String]) async throws {
         if strict {
             let isValid = await AnisetteDataProvider.validateServer(url: url, strict: true)
             guard isValid else {
-                print("Error: Strict validation failed for remote server '\(url.absoluteString)'. Endpoint is not ready or not returning valid Anisette payload.")
+                printError("Strict validation failed for remote server '\(url.absoluteString)'. Endpoint is not ready or not returning valid Anisette payload.")
                 exit(1)
             }
         }
         mode = .remote(server: url)
     } else {
-        print("Error: An Anisette mode is required. Specify one of:")
-        print("  --server <url>                 (Direct remote Anisette server)")
-        print("  --local <dir>                  (Local ADI library directory)")
-        print("  --oda <url>                    (Remote ODA package / catalog URL)")
-        print("  --select-server --source <url> (Select interactively from catalog)")
+        printError("""
+        An Anisette mode is required. Specify one of:
+          --server <url>                 (Direct remote Anisette server)
+          --local <dir>                  (Local ADI library directory)
+          --oda <url>                    (Remote ODA package / catalog URL)
+          --select-server --source <url> (Select interactively from catalog)
+          --failover --source <url>      (Automatic catalog failover)
+        """)
         exit(1)
     }
 
-    print("Fetching Anisette data...")
+    var existingData: DeviceData? = nil
+    let targetDataURL = deviceDataPath.map { URL(fileURLWithPath: $0) } ?? DeviceDataManager.defaultURL
+
+    if DeviceDataManager.hasData(at: targetDataURL) {
+        var devPass = deviceDataPassword
+        var loaded = false
+        while !loaded {
+            if let p = devPass {
+                do {
+                    existingData = try DeviceDataManager.load(from: targetDataURL, password: p)
+                    deviceDataPassword = p
+                    loaded = true
+                } catch DeviceDataError.invalidPassword {
+                    printError("Invalid device data password.")
+                    if isInteractiveTerminal() {
+                        guard let entered = readSecurePassword(prompt: "Enter password for device data ('\(targetDataURL.lastPathComponent)'): "), !entered.isEmpty else {
+                            exit(1)
+                        }
+                        devPass = entered
+                    } else {
+                        exit(1)
+                    }
+                } catch {
+                    printError("Loading device data from '\(targetDataURL.path)': \(error.localizedDescription)")
+                    exit(1)
+                }
+            } else {
+                if isInteractiveTerminal() {
+                    guard let entered = readSecurePassword(prompt: "Enter password for device data ('\(targetDataURL.lastPathComponent)'): "), !entered.isEmpty else {
+                        printError("Device data password cannot be empty.")
+                        exit(1)
+                    }
+                    devPass = entered
+                } else {
+                    printError("Device data file exists at '\(targetDataURL.path)', but no --devicedata-password was provided in non-interactive mode.")
+                    exit(1)
+                }
+            }
+        }
+    }
+
+    switch mode {
+    case .remote(let server):
+        if !enableFailover {
+            print("Fetching Anisette data from \(server.absoluteString)...")
+        }
+    case .localODA(let dir, _):
+        print("Generating Anisette data using local ADI libraries (\(dir.path))...")
+    case .remoteODA(let src, _):
+        print("Fetching On-Device Anisette package from \(src.absoluteString)...")
+    }
+    if enableFailover {
+        print("Fetching Anisette data with auto-failover across \(failoverURLs.count) servers (start index: \(startIndex))...")
+    }
+    print()
+
     let provider = AnisetteDataProvider(mode: mode)
-    let (anisetteData, _) = try await provider.fetchAnisetteData()
+    let anisetteData: AnisetteData
+    let newAdiPb: Data?
 
-    let portal = DeveloperPortal()
+    let errorHandler: @Sendable (Error) async throws -> Bool = { error in
+        if case AnisetteError.outdatedV1Server(let serverURL, let reason) = error {
+            if isInteractiveTerminal() {
+                print()
+                if let reason = reason, !reason.isEmpty {
+                    printWarning("V3 Anisette is unavailable on '\(serverURL.absoluteString)' (\(reason)).")
+                } else {
+                    printWarning("V3 Anisette is unavailable on '\(serverURL.absoluteString)'.")
+                }
+                printWarning("Falling back to legacy V1 mode uses a shared device identity and may increase the risk of Apple ID lockouts.")
+                let input = readInteractiveLine(prompt: "Do you want to continue with legacy V1 Anisette? [Y/n]: ", emptyLineBefore: false, emptyLineAfter: true)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+                if input == "n" || input == "no" {
+                    return false
+                }
+                return true
+            } else {
+                printWarning("Anisette server '\(serverURL.absoluteString)' is operating in outdated V1 mode (shared device identity).")
+                return true
+            }
+        }
+        return false
+    }
 
-    print("Authenticating with Apple Developer Portal...")
-    let authSession = try await portal.authenticate(
-        appleID: email,
-        password: pwd,
-        anisetteData: anisetteData,
-        xcodeVersion: "15.0"
-    ) { mode, completion in
-        handleCLI2FA(mode: mode, completion: completion)
+    if enableFailover {
+        let res = try await provider.fetchAnisetteDataWithFailover(
+            servers: failoverURLs,
+            startIndex: startIndex,
+            identifier: existingData?.identifier ?? UUID(),
+            existingAdiBlob: existingData?.adiBlob,
+            onError: errorHandler,
+            onSuccess: { winURL in
+                print("Connected to Anisette server: \(winURL.absoluteString)")
+            }
+        )
+        anisetteData = res.data
+        newAdiPb = res.newAdiBlob
+    } else {
+        let res = try await provider.fetchAnisetteData(
+            identifier: existingData?.identifier ?? UUID(),
+            existingAdiBlob: existingData?.adiBlob,
+            onError: errorHandler
+        )
+        anisetteData = res.data
+        newAdiPb = res.newAdiBlob
+        print("Anisette headers acquired successfully.")
+    }
+
+    if let freshBlob = newAdiPb {
+        if deviceDataPassword == nil && isInteractiveTerminal() {
+            if let entered = readSecurePassword(prompt: "Enter password to encrypt new device data (\(targetDataURL.lastPathComponent)): "), !entered.isEmpty {
+                deviceDataPassword = entered
+            }
+        }
+        if let devPass = deviceDataPassword {
+            let newData = DeviceData(
+                identifier: existingData?.identifier ?? UUID(),
+                adiBlob: freshBlob,
+                machineID: anisetteData.machineID,
+                localUserID: anisetteData.localUserID
+            )
+            try DeviceDataManager.save(newData, to: targetDataURL, password: devPass)
+            print("Device data saved and encrypted to: \(targetDataURL.path)")
+        }
+    }
+
+    if let email = appleID {
+        let pwd: String
+        if let p = password, !p.isEmpty {
+            pwd = p
+        } else {
+            if isInteractiveTerminal() {
+                guard let entered = readSecurePassword(prompt: "Enter password for \(email): "), !entered.isEmpty else {
+                    printError("Password cannot be empty.")
+                    exit(1)
+                }
+                pwd = entered
+            } else {
+                printError("Password is required for \(email) in non-interactive mode. Use --password <pass>.")
+                exit(1)
+            }
+        }
+
+        print("Authenticating with Apple Developer Portal...")
+        authSession = try await portal.authenticate(
+            appleID: email,
+            password: pwd,
+            anisetteData: anisetteData,
+            xcodeVersion: "15.0"
+        ) { mode, completion in
+            handleCLI2FA(mode: mode, completion: completion)
+        }
+
+        try SessionManager.save(authSession, to: sessionURL, password: encryptPassword)
+        let savedPath = (sessionURL ?? SessionManager.defaultSessionURL).path
+        print("Authentication successful! Session saved to: \(savedPath)")
+
+        if action == "login" {
+            print("Logged in as: \(authSession.account.name) (DSID: \(authSession.account.identifier))")
+            return
+        }
+    } else {
+        let target = sessionURL ?? SessionManager.defaultSessionURL
+        guard SessionManager.hasSession(at: target) else {
+            printError("No active session found at '\(target.path)'. Please run: sidesign auth login --apple-id <email>")
+            exit(1)
+        }
+
+        do {
+            authSession = try SessionManager.load(from: target, password: password ?? encryptPassword)
+        } catch SessionStorageError.invalidPassword {
+            guard let entered = readSecurePassword(prompt: "Enter session decryption password: "), !entered.isEmpty else {
+                printError("Password required to decrypt session.")
+                exit(1)
+            }
+            authSession = try SessionManager.load(from: target, password: entered)
+        }
     }
 
     let account = authSession.account
-    let session = authSession.session
-
-    print("Authentication successful! Logged in as: \(account.name)")
-
-    let action = args[0]
-    if action == "login" {
-        print("Session DSID: \(account.identifier)")
-        return
-    }
+    var session = authSession.session
+    session.anisetteData = anisetteData
 
     switch action {
     case "teams":
-        print("\nDeveloper Teams:")
         let teams = try await portal.fetchTeams(for: account, session: session)
-        for t in teams {
-            print("  * \(t.name) (ID: \(t.identifier), Type: \(t.type.rawValue))")
+        if !SideSignLogging.isLoggingEnabled {
+            print("\nDeveloper Teams:")
+            for t in teams {
+                print("  * \(t.name) (ID: \(t.identifier), Type: \(t.type.rawValue))")
+            }
         }
 
     case "devices":
         let teams = try await portal.fetchTeams(for: account, session: session)
         guard let team = teams.first else {
-            print("Error: No teams found on this account.")
+            printError("No teams found on this account.")
             return
         }
         if args.contains("register") {
@@ -758,17 +1035,19 @@ func handleAuth(args: [String]) async throws {
             let device = try await portal.registerDevice(name: name, identifier: udid, type: DeviceType.iPhone, team: team, session: session)
             print("Successfully registered device: \(device.name) (\(device.identifier))")
         } else {
-            print("\nRegistered Devices for team '\(team.name)':")
             let devices = try await portal.fetchDevices(for: team, session: session)
-            for d in devices {
-                print("  * \(d.name) [\(d.identifier)] (\(d.type.displayName))")
+            if !SideSignLogging.isLoggingEnabled {
+                print("\nRegistered Devices for team '\(team.name)':")
+                for d in devices {
+                    print("  * \(d.name) [\(d.identifier)] (\(d.type.displayName))")
+                }
             }
         }
 
     case "certs":
         let teams = try await portal.fetchTeams(for: account, session: session)
         guard let team = teams.first else {
-            print("Error: No teams found on this account.")
+            printError("No teams found on this account.")
             return
         }
         if args.contains("create") {
@@ -792,13 +1071,15 @@ func handleAuth(args: [String]) async throws {
                 _ = try await portal.revokeCertificate(targetCert, for: team, session: session)
                 print("Certificate revoked successfully.")
             } else {
-                print("Error: Certificate ID not found.")
+                printError("Certificate ID not found.")
             }
         } else {
-            print("\nCertificates for team '\(team.name)':")
             let certs = try await portal.fetchCertificates(for: team, session: session)
-            for c in certs {
-                print("  * \(c.name) [ID: \(c.identifier ?? "unknown"), Serial: \(c.serialNumber)]")
+            if !SideSignLogging.isLoggingEnabled {
+                print("\nCertificates for team '\(team.name)':")
+                for c in certs {
+                    print("  * \(c.name) [ID: \(c.identifier ?? "unknown"), Serial: \(c.serialNumber)]")
+                }
             }
         }
 
@@ -837,13 +1118,15 @@ func handleAuth(args: [String]) async throws {
                 _ = try await portal.deleteAppID(target, for: team, session: session)
                 print("Successfully deleted App ID: \(target.name) (\(target.bundleIdentifier))")
             } else {
-                print("Error: App ID '\(targetID)' not found.")
+                printError("App ID '\(targetID)' not found.")
             }
         } else {
-            print("\nApp IDs for team '\(team.name)':")
             let appIDs = try await portal.fetchAppIDs(for: team, session: session)
-            for a in appIDs {
-                print("  * \(a.name) [\(a.bundleIdentifier)] (ID: \(a.identifier))")
+            if !SideSignLogging.isLoggingEnabled {
+                print("\nApp IDs for team '\(team.name)':")
+                for a in appIDs {
+                    print("  * \(a.name) [\(a.bundleIdentifier)] (ID: \(a.identifier))")
+                }
             }
         }
 
@@ -881,21 +1164,23 @@ func handleAuth(args: [String]) async throws {
             }
             let appIDs = try await portal.fetchAppIDs(for: team, session: session)
             guard let targetAppID = appIDs.first(where: { $0.identifier == appIDStr || $0.bundleIdentifier == appIDStr }) else {
-                print("Error: App ID '\(appIDStr)' not found.")
+                printError("App ID '\(appIDStr)' not found.")
                 exit(1)
             }
             let groups = try await portal.fetchAppGroups(for: team, session: session)
             guard let targetGroup = groups.first(where: { $0.identifier == groupIDStr || $0.groupID == groupIDStr }) else {
-                print("Error: App Group '\(groupIDStr)' not found.")
+                printError("App Group '\(groupIDStr)' not found.")
                 exit(1)
             }
             let updated = try await portal.assignAppGroups([targetGroup], to: targetAppID, team: team, session: session)
             print("Successfully assigned group to App ID: \(updated.name)")
         } else {
-            print("\nApp Groups for team '\(team.name)':")
             let groups = try await portal.fetchAppGroups(for: team, session: session)
-            for g in groups {
-                print("  * \(g.name) [\(g.identifier)] (ID: \(g.groupID))")
+            if !SideSignLogging.isLoggingEnabled {
+                print("\nApp Groups for team '\(team.name)':")
+                for g in groups {
+                    print("  * \(g.name) [\(g.identifier)] (ID: \(g.groupID))")
+                }
             }
         }
 
@@ -917,7 +1202,7 @@ func handleAuth(args: [String]) async throws {
             }
             let appIDs = try await portal.fetchAppIDs(for: team, session: session)
             guard let targetAppID = appIDs.first(where: { $0.bundleIdentifier == bundleID || $0.identifier == bundleID }) else {
-                print("Error: App ID '\(bundleID)' not found.")
+                printError("App ID '\(bundleID)' not found.")
                 exit(1)
             }
             print("Downloading Provisioning Profile for \(targetAppID.bundleIdentifier)...")
@@ -945,35 +1230,36 @@ func handleAuth(args: [String]) async throws {
                 _ = try await portal.deleteProvisioningProfile(target, team: team, session: session)
                 print("Successfully deleted Provisioning Profile: \(target.name)")
             } else {
-                print("Error: Provisioning Profile '\(profID)' not found.")
+                printError("Provisioning Profile '\(profID)' not found.")
             }
         } else {
-            print("\nProvisioning Profiles for team '\(team.name)':")
             let profiles = try await portal.fetchProvisioningProfiles(for: team, session: session)
-            for p in profiles {
-                print("  * \(p.name) [BundleID: \(p.bundleIdentifier), UUID: \(p.uuid)]")
+            if !SideSignLogging.isLoggingEnabled {
+                print("\nProvisioning Profiles for team '\(team.name)':")
+                for p in profiles {
+                    print("  * \(p.name) [\(p.bundleIdentifier)] (UUID: \(p.uuid))")
+                }
             }
         }
 
     default:
-        print("Unknown auth subcommand: \(action)")
+        printError("Unknown auth subcommand: \(action)")
         exit(1)
     }
 }
 
 func handleCLI2FA(mode: TwoFactorMode, completion: @escaping (TwoFactorAction) -> Void) {
+    clearStdinBuffer()
     switch mode {
     case .trustedDevice(let error):
         if let error = error {
             print("\n[2FA] Verification Error: \(error)")
-            print("Press [Enter] to retry code entry, or 'c' to cancel: ", terminator: "")
-            if let input = readLine(strippingNewline: true), input.lowercased() == "c" {
+            if let input = readInteractiveLine(prompt: "Press [Enter] to retry code entry, or 'c' to cancel: "), input.lowercased() == "c" {
                 completion(TwoFactorAction.cancel)
                 return
             }
         }
-        print("\nEnter 6-digit verification code from your Apple device (or 'p' for phone call/SMS, 'c' to cancel): ", terminator: "")
-        guard let code = readLine(strippingNewline: true), !code.isEmpty else {
+        guard let code = readInteractiveLine(prompt: "Enter 6-digit verification code from your Apple device (or 'p' for phone call/SMS, 'c' to cancel): "), !code.isEmpty else {
             completion(TwoFactorAction.cancel)
             return
         }
@@ -988,15 +1274,13 @@ func handleCLI2FA(mode: TwoFactorMode, completion: @escaping (TwoFactorAction) -
     case .sms(let phoneNumbers, let activeID, let error):
         if let error = error {
             print("\n[SMS] Verification Error: \(error)")
-            print("Press [Enter] to retry code entry, or 'c' to cancel: ", terminator: "")
-            if let input = readLine(strippingNewline: true), input.lowercased() == "c" {
+            if let input = readInteractiveLine(prompt: "Press [Enter] to retry code entry, or 'c' to cancel: "), input.lowercased() == "c" {
                 completion(TwoFactorAction.cancel)
                 return
             }
         }
         let activePhone = phoneNumbers.first(where: { $0.id == activeID })?.number ?? "phone"
-        print("\nEnter 6-digit code sent via SMS to \(activePhone) (or 'v' for voice call, 'r' to resend, 'c' to cancel): ", terminator: "")
-        guard let code = readLine(strippingNewline: true), !code.isEmpty else {
+        guard let code = readInteractiveLine(prompt: "Enter 6-digit code sent via SMS to \(activePhone) (or 'v' for voice call, 'r' to resend, 'c' to cancel): "), !code.isEmpty else {
             completion(TwoFactorAction.cancel)
             return
         }
@@ -1013,22 +1297,18 @@ func handleCLI2FA(mode: TwoFactorMode, completion: @escaping (TwoFactorAction) -
     case .voice(let phoneNumbers, let activeID, let error):
         if let error = error {
             print("\n[Voice] Verification Error: \(error)")
-            print("Press [Enter] to retry code entry, or 'c' to cancel: ", terminator: "")
-            if let input = readLine(strippingNewline: true), input.lowercased() == "c" {
+            if let input = readInteractiveLine(prompt: "Press [Enter] to retry code entry, or 'c' to cancel: "), input.lowercased() == "c" {
                 completion(TwoFactorAction.cancel)
                 return
             }
         }
         let activePhone = phoneNumbers.first(where: { $0.id == activeID })?.number ?? "phone"
-        print("\nEnter 6-digit code from phone call to \(activePhone) (or 's' for SMS, 'r' to call again, 'c' to cancel): ", terminator: "")
-        guard let code = readLine(strippingNewline: true), !code.isEmpty else {
+        guard let code = readInteractiveLine(prompt: "Enter 6-digit code from voice call to \(activePhone) (or 'r' to resend, 'c' to cancel): "), !code.isEmpty else {
             completion(TwoFactorAction.cancel)
             return
         }
         if code.lowercased() == "c" {
             completion(TwoFactorAction.cancel)
-        } else if code.lowercased() == "s" {
-            completion(TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.sms))
         } else if code.lowercased() == "r" {
             completion(TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.voice))
         } else {
@@ -1153,7 +1433,7 @@ func handleCSR(args: [String]) throws {
 
 func selectAnisetteServerInteractively(sourceURLString: String? = nil) async throws -> String {
     guard let sourceStr = sourceURLString, let url = URL(string: sourceStr) else {
-        print("Error: --source <url> (or --list <url>) is required for interactive server selection.")
+        printError("--source <url> is required for interactive server selection.")
         exit(1)
     }
 
@@ -1163,7 +1443,7 @@ func selectAnisetteServerInteractively(sourceURLString: String? = nil) async thr
 
     let visibleServers = data.servers.filter { !$0.isHidden }
     guard !visibleServers.isEmpty else {
-        print("No servers found in server list.")
+        printError("No servers found in server list.")
         exit(1)
     }
 
@@ -1177,7 +1457,7 @@ func selectAnisetteServerInteractively(sourceURLString: String? = nil) async thr
     guard let input = readLine(strippingNewline: true),
           let choice = Int(input),
           choice >= 1 && choice <= visibleServers.count else {
-        print("Invalid selection.")
+        printError("Invalid selection.")
         exit(1)
     }
 
@@ -1202,7 +1482,7 @@ func handleAnisette(args: [String]) async throws {
         }
 
         guard let src = sourceURLStr, let url = URL(string: src) else {
-            print("Error: Server list URL is required. Usage: sidesign anisette servers --source <url>")
+            printError("Server list URL is required. Usage: sidesign anisette servers --source <url>")
             exit(1)
         }
 
@@ -1223,7 +1503,11 @@ func handleAnisette(args: [String]) async throws {
     var odaURL: String?
     var sourceURLStr: String?
     var anisetteDeviceUDID: String?
+    var deviceDataPath: String?
+    var deviceDataPassword: String?
     var selectServer = false
+    var enableFailover = false
+    var startIndex = 0
     var asJSON = false
     var strict = false
 
@@ -1232,7 +1516,13 @@ func handleAnisette(args: [String]) async throws {
         let a = args[idx]
         if a == "--json" { asJSON = true }
         else if a == "--strict" { strict = true }
-        else if (a == "--local" || a == "--local-adi") && idx + 1 < args.count {
+        else if (a == "--devicedata-password" || a == "--adi-password") && idx + 1 < args.count {
+            deviceDataPassword = args[idx + 1]
+            idx += 1
+        } else if (a == "--devicedata-path" || a == "--adi-path") && idx + 1 < args.count {
+            deviceDataPath = args[idx + 1]
+            idx += 1
+        } else if (a == "--local" || a == "--local-adi") && idx + 1 < args.count {
             localDir = args[idx + 1]
             idx += 1
         } else if a == "--oda" && idx + 1 < args.count {
@@ -1249,6 +1539,10 @@ func handleAnisette(args: [String]) async throws {
             idx += 1
         } else if a == "--select-server" || a == "-s" {
             selectServer = true
+        } else if a == "--failover" || a == "--auto-failover" {
+            enableFailover = true
+        } else if a == "--start-index" && idx + 1 < args.count {
+            if let idxVal = Int(args[idx + 1]) { startIndex = idxVal; idx += 1 }
         } else if a.hasPrefix("http://") || a.hasPrefix("https://") {
             serverURL = a
         }
@@ -1259,8 +1553,22 @@ func handleAnisette(args: [String]) async throws {
         serverURL = try await selectAnisetteServerInteractively(sourceURLString: sourceURLStr)
     }
 
+    var failoverURLs: [URL] = []
     let mode: AnisetteMode
-    if let dir = localDir {
+    if enableFailover {
+        guard let sourceStr = sourceURLStr, let listURL = URL(string: sourceStr) else {
+            printError("--source <url> is required when using --failover.")
+            exit(1)
+        }
+        let serverData = try await AnisetteDataProvider.shared.fetchServerList(from: listURL)
+        let visible = serverData.servers.filter { !$0.isHidden }
+        failoverURLs = visible.compactMap { URL(string: $0.address) }
+        guard !failoverURLs.isEmpty else {
+            printError("No active servers found in catalog '\(listURL.absoluteString)'.")
+            exit(1)
+        }
+        mode = .remote(server: failoverURLs.first!)
+    } else if let dir = localDir {
         mode = .localODA(libsDir: URL(fileURLWithPath: dir))
     } else if let odaStr = odaURL, let odaURL = URL(string: odaStr) {
         mode = .remoteODA(sourceURL: odaURL)
@@ -1268,24 +1576,163 @@ func handleAnisette(args: [String]) async throws {
         if strict {
             let isValid = await AnisetteDataProvider.validateServer(url: url, strict: true)
             guard isValid else {
-                print("Error: Strict validation failed for remote server '\(url.absoluteString)'. Endpoint is not ready or not returning valid Anisette payload.")
+                printError("Strict validation failed for remote server '\(url.absoluteString)'. Endpoint is not ready or not returning valid Anisette payload.")
                 exit(1)
             }
         }
         mode = .remote(server: url)
     } else {
-        print("Error: An Anisette mode is required. Specify one of:")
-        print("  --server <url>                 (Direct remote Anisette server)")
-        print("  --local <dir>                  (Local ADI library directory)")
-        print("  --oda <url>                    (Remote ODA package / catalog URL)")
-        print("  --select-server --source <url> (Select interactively from catalog)")
+        printError("""
+        An Anisette mode is required. Specify one of:
+          --server <url>                 (Direct remote Anisette server)
+          --local <dir>                  (Local ADI library directory)
+          --oda <url>                    (Remote ODA package / catalog URL)
+          --select-server --source <url> (Select interactively from catalog)
+          --failover --source <url>      (Automatic catalog failover)
+        """)
         exit(1)
     }
 
-    print("Fetching Anisette data...")
+    var existingData: DeviceData? = nil
+    let targetDataURL = deviceDataPath.map { URL(fileURLWithPath: $0) } ?? DeviceDataManager.defaultURL
+
+    if DeviceDataManager.hasData(at: targetDataURL) {
+        var devPass = deviceDataPassword
+        var loaded = false
+        while !loaded {
+            if let p = devPass {
+                do {
+                    existingData = try DeviceDataManager.load(from: targetDataURL, password: p)
+                    deviceDataPassword = p
+                    loaded = true
+                } catch DeviceDataError.invalidPassword {
+                    printError("Invalid device data password.")
+                    if isInteractiveTerminal() {
+                        print("Enter password for device data ('\(targetDataURL.lastPathComponent)'): ", terminator: "")
+                        guard let entered = readLine(strippingNewline: true), !entered.isEmpty else {
+                            exit(1)
+                        }
+                        devPass = entered
+                    } else {
+                        exit(1)
+                    }
+                } catch {
+                    printError("Loading device data from '\(targetDataURL.path)': \(error.localizedDescription)")
+                    exit(1)
+                }
+            } else {
+                if isInteractiveTerminal() {
+                    print("Enter password for device data ('\(targetDataURL.lastPathComponent)'): ", terminator: "")
+                    guard let entered = readLine(strippingNewline: true), !entered.isEmpty else {
+                        printError("Device data password cannot be empty.")
+                        exit(1)
+                    }
+                    devPass = entered
+                } else {
+                    printError("Device data file exists at '\(targetDataURL.path)', but no --devicedata-password was provided in non-interactive mode.")
+                    exit(1)
+                }
+            }
+        }
+    }
+
+    if !asJSON {
+        switch mode {
+        case .remote(let server):
+            if !enableFailover {
+                print("Fetching Anisette data from \(server.absoluteString)...")
+            }
+        case .localODA(let dir, _):
+            print("Generating Anisette data using local ADI libraries (\(dir.path))...")
+        case .remoteODA(let src, _):
+            print("Fetching On-Device Anisette package from \(src.absoluteString)...")
+        }
+        if enableFailover {
+            print("Fetching Anisette data with auto-failover across \(failoverURLs.count) servers (start index: \(startIndex))...")
+        }
+        print()
+    }
+
     let provider = AnisetteDataProvider(mode: mode)
-    let identifier = (anisetteDeviceUDID != nil ? UUID(uuidString: anisetteDeviceUDID!) : nil) ?? UUID()
-    let (data, _) = try await provider.fetchAnisetteData(identifier: identifier, customDeviceID: anisetteDeviceUDID)
+    let identifier = existingData?.identifier ?? (anisetteDeviceUDID != nil ? UUID(uuidString: anisetteDeviceUDID!) : nil) ?? UUID()
+    let data: AnisetteData
+    let newAdiPb: Data?
+
+    let outputJSON = asJSON
+
+    let errorHandler: @Sendable (Error) async throws -> Bool = { error in
+        if case AnisetteError.outdatedV1Server(let serverURL, let reason) = error {
+            if isInteractiveTerminal() && !outputJSON {
+                print()
+                if let reason = reason, !reason.isEmpty {
+                    printWarning("V3 Anisette is unavailable on '\(serverURL.absoluteString)' (\(reason)).")
+                } else {
+                    printWarning("V3 Anisette is unavailable on '\(serverURL.absoluteString)'.")
+                }
+                printWarning("Falling back to legacy V1 mode uses a shared device identity and may increase the risk of Apple ID lockouts.")
+                let input = readInteractiveLine(prompt: "Do you want to continue with legacy V1 Anisette? [Y/n]: ", emptyLineBefore: false, emptyLineAfter: true)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+                if input == "n" || input == "no" {
+                    return false
+                }
+                return true
+            } else {
+                if !outputJSON {
+                    printWarning("Anisette server '\(serverURL.absoluteString)' is operating in outdated V1 mode (shared device identity).")
+                }
+                return true
+            }
+        }
+        return false
+    }
+
+    if enableFailover {
+        let res = try await provider.fetchAnisetteDataWithFailover(
+            servers: failoverURLs,
+            startIndex: startIndex,
+            identifier: identifier,
+            existingAdiBlob: existingData?.adiBlob,
+            customDeviceID: anisetteDeviceUDID,
+            onError: errorHandler,
+            onSuccess: { @Sendable winURL in
+                if !outputJSON {
+                    print("Connected to Anisette server: \(winURL.absoluteString)")
+                }
+            }
+        )
+        data = res.data
+        newAdiPb = res.newAdiBlob
+    } else {
+        let res = try await provider.fetchAnisetteData(
+            identifier: identifier,
+            existingAdiBlob: existingData?.adiBlob,
+            customDeviceID: anisetteDeviceUDID,
+            onError: errorHandler
+        )
+        data = res.data
+        newAdiPb = res.newAdiBlob
+        if !outputJSON {
+            print("Anisette headers acquired successfully.")
+        }
+    }
+
+    if let freshBlob = newAdiPb {
+        if deviceDataPassword == nil && isInteractiveTerminal() {
+            print("Enter password to encrypt new device data (\(targetDataURL.lastPathComponent)): ", terminator: "")
+            if let entered = readLine(strippingNewline: true), !entered.isEmpty {
+                deviceDataPassword = entered
+            }
+        }
+        if let devPass = deviceDataPassword {
+            let newData = DeviceData(
+                identifier: identifier,
+                adiBlob: freshBlob,
+                machineID: data.machineID,
+                localUserID: data.localUserID
+            )
+            try DeviceDataManager.save(newData, to: targetDataURL, password: devPass)
+            print("Device data saved and encrypted to: \(targetDataURL.path)")
+        }
+    }
 
     if asJSON {
         let headers = AnisetteDataProvider.toHTTPHeaders(data: data)
@@ -1318,8 +1765,15 @@ if args.contains("--verbose") || args.contains("-v") || args.contains("-vv") || 
     SideSignLogging.setLogging(true)
 }
 
-let command = args[0]
-let subArgs = Array(args.dropFirst())
+print()
+defer { print() }
+
+let nonGlobalArgs = args.filter { !["-v", "--verbose", "-vv", "--debug", "-d"].contains($0) }
+guard let command = nonGlobalArgs.first else {
+    printUsage()
+    exit(0)
+}
+let subArgs = Array(nonGlobalArgs.dropFirst())
 
 do {
     switch command {
@@ -1349,12 +1803,12 @@ do {
         if FileManager.default.fileExists(atPath: command) {
             try await handleSign(args: [command] + subArgs)
         } else {
-            print("Error: Unknown command '\(command)'.")
+            printError("Unknown command '\(command)'.")
             printUsage()
             exit(1)
         }
     }
 } catch {
-    print("\nError: \(error.localizedDescription)")
+    printError(error.localizedDescription)
     exit(1)
 }
