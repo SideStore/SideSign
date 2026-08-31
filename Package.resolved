@@ -1,5 +1,5 @@
 {
-  "originHash" : "c138372324c267553925737043ff9c40182dad5530e1c793999f7798b2d53fc5",
+  "originHash" : "51c892ff08fca21e1508d33e5bc1ea745d53683b5cb93203f95ec837b3b8ecd6",
   "pins" : [
     {
       "identity" : "anisettekit",
@@ -7,7 +7,7 @@
       "location" : "https://github.com/mahee96/AnisetteKit.git",
       "state" : {
         "branch" : "main",
-        "revision" : "40c2a4ae93a8e2732e3b1373b63b2f5f6ec66074"
+        "revision" : "d4943fcf308fa8502b8e06a22f99a5276af1e97c"
       }
     },
     {
@@ -16,7 +16,7 @@
       "location" : "https://github.com/mahee96/CodeSignKit.git",
       "state" : {
         "branch" : "main",
-        "revision" : "e11b1ade98bc60c820f692d2ff952e97ec400b4f"
+        "revision" : "0cf78f2ae2f9977a8882a3a508764e54bd0b6685"
       }
     },
     {
@@ -25,7 +25,7 @@
       "location" : "https://github.com/mahee96/GSACryptoKit.git",
       "state" : {
         "branch" : "main",
-        "revision" : "dc4e1ecc983764cd72292141f3bb77d66e98af47"
+        "revision" : "eaee15ae1fb3a83d0ff09399b2de4354f7cd41b9"
       }
     },
     {
@@ -34,7 +34,7 @@
       "location" : "https://github.com/SideStore/minizip-ng",
       "state" : {
         "branch" : "develop",
-        "revision" : "bd1fdc797e15988fd3826060082907a9c2d8aaca"
+        "revision" : "12a8ab8ccac4a36d4a45340921c7de5f18b0efab"
       }
     },
     {
@@ -42,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-asn1.git",
       "state" : {
-        "revision" : "9f542610331815e29cc3821d3b6f488db8715517",
-        "version" : "1.6.0"
+        "revision" : "a9a5efd40eaf558a2bcd48d64b1d1646be686008",
+        "version" : "1.7.1"
       }
     },
     {
