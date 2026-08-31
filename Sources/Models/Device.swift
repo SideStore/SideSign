@@ -79,6 +79,7 @@ public struct Device: Sendable, Codable, Equatable, Hashable, Identifiable {
     }
 }
 
+#if canImport(Darwin)
 extension OperatingSystemVersion: @retroactive Equatable, @retroactive Hashable, @retroactive Codable, @retroactive Comparable, @retroactive LosslessStringConvertible, @retroactive CustomStringConvertible {
     public static func == (lhs: OperatingSystemVersion, rhs: OperatingSystemVersion) -> Bool {
         lhs.majorVersion == rhs.majorVersion &&
@@ -137,3 +138,34 @@ extension OperatingSystemVersion: @retroactive Equatable, @retroactive Hashable,
         try container.encode(str)
     }
 }
+#else
+extension OperatingSystemVersion: @retroactive Comparable, @retroactive LosslessStringConvertible, @retroactive CustomStringConvertible {
+    public static func < (lhs: OperatingSystemVersion, rhs: OperatingSystemVersion) -> Bool {
+        if lhs.majorVersion != rhs.majorVersion {
+            return lhs.majorVersion < rhs.majorVersion
+        }
+        if lhs.minorVersion != rhs.minorVersion {
+            return lhs.minorVersion < rhs.minorVersion
+        }
+        return lhs.patchVersion < rhs.patchVersion
+    }
+
+    public init?(_ description: String) {
+        self.init(string: description)
+    }
+
+    public init?(string: String) {
+        let parts = string.split(separator: ".").compactMap { Int($0) }
+        guard !parts.isEmpty else { return nil }
+        self.init(
+            majorVersion: parts.indices.contains(0) ? parts[0] : 0,
+            minorVersion: parts.indices.contains(1) ? parts[1] : 0,
+            patchVersion: parts.indices.contains(2) ? parts[2] : 0
+        )
+    }
+
+    public var description: String {
+        "\(majorVersion).\(minorVersion).\(patchVersion)"
+    }
+}
+#endif

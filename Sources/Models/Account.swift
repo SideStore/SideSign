@@ -16,6 +16,7 @@ public struct Account: Sendable, Codable, Equatable, Hashable, Identifiable {
     public var lastName: String
 
     public var name: String {
+        #if canImport(Darwin)
         var components = PersonNameComponents()
         components.givenName = firstName
         components.familyName = lastName
@@ -24,6 +25,9 @@ public struct Account: Sendable, Codable, Equatable, Hashable, Identifiable {
             style: .default,
             options: []
         )
+        #else
+        return [firstName, lastName].filter { !$0.isEmpty }.joined(separator: " ")
+        #endif
     }
 
     public init(appleID: String, identifier: String, firstName: String = "", lastName: String = "") {

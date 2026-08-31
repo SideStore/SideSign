@@ -42,14 +42,16 @@ public struct ODAInfo: Codable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.sha256 = (try? container.decodeIfPresent(String.self, forKey: .sha256))
+        let decodedSha = (try? container.decodeIfPresent(String.self, forKey: .sha256))
             ?? (try? container.decodeIfPresent(String.self, forKey: .sha))
             ?? (try? container.decodeIfPresent(String.self, forKey: .s))
+        self.sha256 = decodedSha
 
-        let lVal = (try? container.decodeIfPresent(String.self, forKey: .l))
-            ?? (try? container.decodeIfPresent(String.self, forKey: .libraries))
-            ?? (try? container.decodeIfPresent(String.self, forKey: .payload))
-            ?? (try? container.decodeIfPresent(String.self, forKey: .data))
+        var decodedL: String? = try? container.decodeIfPresent(String.self, forKey: .l)
+        if decodedL == nil { decodedL = try? container.decodeIfPresent(String.self, forKey: .libraries) }
+        if decodedL == nil { decodedL = try? container.decodeIfPresent(String.self, forKey: .payload) }
+        if decodedL == nil { decodedL = try? container.decodeIfPresent(String.self, forKey: .data) }
+        let lVal = decodedL
         let urlVal = try? container.decodeIfPresent(String.self, forKey: .url)
 
         if let raw = lVal ?? urlVal {
@@ -241,7 +243,7 @@ public actor AnisetteDataProvider {
             #if os(macOS)
             let homeDir = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
             self.baseAnisetteDirectory = homeDir.appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
-            #elseif os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
+            #elseif canImport(Darwin)
             if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
                 self.baseAnisetteDirectory = appSupport.appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
             } else {
@@ -276,7 +278,9 @@ public actor AnisetteDataProvider {
         var v3Req = URLRequest(url: v3URL)
         v3Req.timeoutInterval = 3
         v3Req.httpMethod = "GET"
+        #if canImport(Darwin)
         v3Req.cachePolicy = .reloadIgnoringLocalCacheData
+        #endif
 
         if let (data, response) = try? await URLSession.shared.data(for: v3Req),
            let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) {
@@ -290,7 +294,9 @@ public actor AnisetteDataProvider {
         var rootReq = URLRequest(url: url)
         rootReq.timeoutInterval = 3
         rootReq.httpMethod = "GET"
+        #if canImport(Darwin)
         rootReq.cachePolicy = .reloadIgnoringLocalCacheData
+        #endif
 
         if let (data, response) = try? await URLSession.shared.data(for: rootReq),
            let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) {

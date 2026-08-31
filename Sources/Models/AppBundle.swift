@@ -66,17 +66,16 @@ public struct AppBundle: Sendable, Identifiable, Hashable, Equatable {
             return nil
         }
 
-        guard let bundleIdentifier = info[kCFBundleIdentifierKey as String] as? String else {
+        guard let bundleIdentifier = (info["CFBundleIdentifier"] as? String) ?? (info["bundle-identifier"] as? String) else {
             return nil
         }
 
         let name = (info["CFBundleDisplayName"] as? String)
             ?? (info["CFBundleName"] as? String)
-            ?? (info[kCFBundleNameKey as String] as? String)
             ?? fileURL.deletingPathExtension().lastPathComponent
 
         let version = (info["CFBundleShortVersionString"] as? String) ?? "1.0"
-        let buildVersion = (info[kCFBundleVersionKey as String] as? String) ?? "1"
+        let buildVersion = (info["CFBundleVersion"] as? String) ?? "1"
 
         let minimumVersionString = (info["MinimumOSVersion"] as? String) ?? "1.0"
         let components = minimumVersionString.split(separator: ".")

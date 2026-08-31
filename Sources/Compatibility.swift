@@ -176,6 +176,7 @@ public extension AppBundle {
 }
 #endif
 
+#if canImport(Darwin)
 extension Feature: _ObjectiveCBridgeable {
     public typealias _ObjectiveCType = NSString
 
@@ -221,6 +222,7 @@ extension Entitlement: _ObjectiveCBridgeable {
         Entitlement(rawValue: (source ?? "") as String)
     }
 }
+#endif
 
 // Compatibility completion handler extensions on DeveloperPortalAPI for legacy callers
 public extension DeveloperPortalAPI {
