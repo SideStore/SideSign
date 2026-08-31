@@ -84,3 +84,27 @@ public struct Team: Sendable, Codable, Equatable, Hashable, Identifiable {
         try container.encode(type, forKey: .teamType)
     }
 }
+
+public extension TeamType {
+    var allowedEntitlements: Set<Entitlement>? {
+        switch self {
+        case .free:
+            return Entitlement.freeEntitlements
+        case .individual, .organization:
+            return Entitlement.paidEntitlements
+        case .unknown:
+            return nil
+        }
+    }
+
+    var allowedFeatures: Set<Feature>? {
+        switch self {
+        case .free:
+            return Feature.freeFeatures
+        case .individual, .organization:
+            return Feature.paidFeatures
+        case .unknown:
+            return nil
+        }
+    }
+}

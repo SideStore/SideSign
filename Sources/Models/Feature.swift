@@ -74,4 +74,33 @@ public extension Feature {
     static let increasedMemoryLimit: Feature            = "increasedMemoryLimit"
     static let extendedVirtualAddressing: Feature       = "extendedVirtualAddressing"
     static let increasedDebuggingMemoryLimit: Feature   = "increasedDebuggingMemoryLimit"
+
+    static let freeFeatures: Set<Feature> = [
+        .appGroups,
+        .interAppAudio
+    ]
+
+    static let paidFeatures: Set<Feature> = [
+        .appGroups,
+        .interAppAudio,
+        .gameCenter,
+        .inAppPurchase,
+        .pushNotifications,
+        .associatedDomains,
+        .dataProtection,
+        .siri,
+        .applePay,
+        .vpn,
+        .networkExtensions,
+        .multipath,
+        .hotspot,
+        .nfc,
+        .classKit,
+        .autoFillCredentialProvider,
+        .accessWiFiInformation,
+        .wirelessAccessoryConfiguration,
+        .increasedMemoryLimit,
+        .extendedVirtualAddressing,
+        .increasedDebuggingMemoryLimit
+    ]
 }

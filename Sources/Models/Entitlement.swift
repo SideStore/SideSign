@@ -52,4 +52,44 @@ public extension Entitlement {
     static let pushNotifications: Entitlement               = "aps-environment"
     static let gameCenter: Entitlement                      = "game-center"
     static let inAppPurchase: Entitlement                   = "in-app-purchase"
+
+    static let freeEntitlements: Set<Entitlement> = [
+        .appGroups,
+        .interAppAudio,
+        .getTaskAllow,
+        .increasedMemoryLimit,
+        .increasedDebuggingMemoryLimit,
+        .extendedVirtualAddressing,
+        .teamIdentifier,
+        .keychainAccessGroups,
+        .applicationIdentifier
+    ]
+
+    static let paidEntitlements: Set<Entitlement> = [
+        .appGroups,
+        .interAppAudio,
+        .getTaskAllow,
+        .increasedMemoryLimit,
+        .increasedDebuggingMemoryLimit,
+        .extendedVirtualAddressing,
+        .teamIdentifier,
+        .keychainAccessGroups,
+        .applicationIdentifier,
+        .associatedDomains,
+        .dataProtection,
+        .siri,
+        .applePay,
+        .vpn,
+        .networkExtensions,
+        .multipath,
+        .hotspot,
+        .nfc,
+        .classKit,
+        .autoFillCredentialProvider,
+        .accessWiFiInformation,
+        .wirelessAccessoryConfiguration,
+        .pushNotifications,
+        .gameCenter,
+        .inAppPurchase
+    ]
 }
