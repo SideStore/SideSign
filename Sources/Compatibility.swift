@@ -230,6 +230,10 @@ public extension DeveloperPortalAPI {
         try await addAppGroup(name: name, groupIdentifier: groupIdentifier, team: team, session: session)
     }
 
+    func update(_ appID: AppID, team: Team, session: Session) async throws -> AppID {
+        try await updateAppID(appID, team: team, session: session)
+    }
+
     func assign(_ appID: AppID, to appGroups: [AppGroup], team: Team, session: Session) async throws -> AppID {
         try await assignAppGroups(appGroups, to: appID, team: team, session: session)
     }

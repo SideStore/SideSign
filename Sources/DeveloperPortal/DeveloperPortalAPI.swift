@@ -51,7 +51,7 @@ public protocol DeveloperPortalAPI: Sendable {
     func revokeCertificate(_ certificate: X509Certificate, for team: Team, session: Session) async throws -> Bool
     func fetchAppIDs(for team: Team, session: Session) async throws -> [AppID]
     func addAppID(withName name: String, bundleIdentifier: String, team: Team, session: Session) async throws -> AppID
-    func update(_ appID: AppID, team: Team, session: Session) async throws -> AppID
+    func updateAppID(_ appID: AppID, team: Team, session: Session) async throws -> AppID
     func deleteAppID(_ appID: AppID, for team: Team, session: Session) async throws -> Bool
     func fetchAppGroups(for team: Team, session: Session) async throws -> [AppGroup]
     func addAppGroup(name: String, groupIdentifier: String, team: Team, session: Session) async throws -> AppGroup

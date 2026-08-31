@@ -65,16 +65,23 @@ public extension DeveloperPortal {
         return createdAppID
     }
 
-    func update(_ appID: AppID, team: Team, session: Session) async throws -> AppID {
+    func updateAppID(_ appID: AppID, team: Team, session: Session) async throws -> AppID {
         debugLog("[SideSign] updateAppID starting...")
         verboseLog("[SideSign] AppID: \(appID.bundleIdentifier), Team: \(team.name)")
 
-        var parameters: [String: String] = [
+        var parameters: [String: any Sendable] = [
             "appIdId": appID.identifier
         ]
 
         for (feature, value) in appID.features {
-            parameters[feature.rawValue] = value
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.lowercased() == "true" {
+                parameters[feature.rawValue] = true
+            } else if trimmed.lowercased() == "false" {
+                parameters[feature.rawValue] = false
+            } else {
+                parameters[feature.rawValue] = trimmed
+            }
         }
 
         let response: AppIDResponse = try await sendRequest(url: Constants.URLs.updateAppID, additionalParameters: parameters, session: session, team: team)
