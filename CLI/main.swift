@@ -1034,12 +1034,73 @@ func handleAuth(args: [String]) async throws {
             print("Registering device \(name) (\(udid))...")
             let device = try await portal.registerDevice(name: name, identifier: udid, type: DeviceType.iPhone, team: team, session: session)
             print("Successfully registered device: \(device.name) (\(device.identifier))")
+        } else if args.contains("update") || args.contains("rename") {
+            var name: String?
+            var udid: String?
+            var idx = 1
+            while idx < args.count {
+                if args[idx] == "--name" && idx + 1 < args.count { name = args[idx + 1]; idx += 1 }
+                if (args[idx] == "--udid" || args[idx] == "--id") && idx + 1 < args.count { udid = args[idx + 1]; idx += 1 }
+                idx += 1
+            }
+            guard let name = name, let udid = udid else {
+                print("Usage: sidesign auth devices update --udid <udid> --name <new_name>")
+                exit(1)
+            }
+            let devices = try await portal.fetchDevices(for: team, session: session)
+            guard var targetDevice = devices.first(where: { $0.identifier == udid || $0.deviceID == udid }) else {
+                printError("Device '\(udid)' not found.")
+                exit(1)
+            }
+            targetDevice.name = name
+            print("Updating device name to '\(name)'...")
+            let updated = try await portal.updateDevice(targetDevice, team: team, session: session)
+            print("Successfully updated device: \(updated.name) (\(updated.identifier))")
+        } else if args.contains("disable") {
+            var udid: String?
+            var idx = 1
+            while idx < args.count {
+                if (args[idx] == "--udid" || args[idx] == "--id") && idx + 1 < args.count { udid = args[idx + 1]; idx += 1 }
+                idx += 1
+            }
+            guard let udid = udid else {
+                print("Usage: sidesign auth devices disable --udid <udid>")
+                exit(1)
+            }
+            let devices = try await portal.fetchDevices(for: team, session: session)
+            guard let targetDevice = devices.first(where: { $0.identifier == udid || $0.deviceID == udid }) else {
+                printError("Device '\(udid)' not found.")
+                exit(1)
+            }
+            print("Disabling device '\(targetDevice.name)' (\(targetDevice.identifier))...")
+            let disabled = try await portal.disableDevice(targetDevice, team: team, session: session)
+            print("Successfully disabled device: \(disabled.name)")
+        } else if args.contains("delete") || args.contains("remove") {
+            var udid: String?
+            var idx = 1
+            while idx < args.count {
+                if (args[idx] == "--udid" || args[idx] == "--id") && idx + 1 < args.count { udid = args[idx + 1]; idx += 1 }
+                idx += 1
+            }
+            guard let udid = udid else {
+                print("Usage: sidesign auth devices delete --udid <udid>")
+                exit(1)
+            }
+            let devices = try await portal.fetchDevices(for: team, session: session)
+            guard let targetDevice = devices.first(where: { $0.identifier == udid || $0.deviceID == udid }) else {
+                printError("Device '\(udid)' not found.")
+                exit(1)
+            }
+            print("Deleting device '\(targetDevice.name)' (\(targetDevice.identifier))...")
+            _ = try await portal.deleteDevice(targetDevice, team: team, session: session)
+            print("Successfully deleted device.")
         } else {
             let devices = try await portal.fetchDevices(for: team, session: session)
             if !SideSignLogging.isLoggingEnabled {
                 print("\nRegistered Devices for team '\(team.name)':")
                 for d in devices {
-                    print("  * \(d.name) [\(d.identifier)] (\(d.type.displayName))")
+                    let statusStr = d.status == "d" ? " [DISABLED]" : ""
+                    print("  * \(d.name) [\(d.identifier)] (\(d.type.displayName))\(statusStr)")
                 }
             }
         }
@@ -1174,6 +1235,50 @@ func handleAuth(args: [String]) async throws {
             }
             let updated = try await portal.assignAppGroups([targetGroup], to: targetAppID, team: team, session: session)
             print("Successfully assigned group to App ID: \(updated.name)")
+        } else if args.contains("update") || args.contains("rename") {
+            var name: String?
+            var groupIDStr: String?
+            var idx = 1
+            while idx < args.count {
+                if args[idx] == "--name" && idx + 1 < args.count { name = args[idx + 1]; idx += 1 }
+                if (args[idx] == "--id" || args[idx] == "--group-id") && idx + 1 < args.count { groupIDStr = args[idx + 1]; idx += 1 }
+                idx += 1
+            }
+            guard let name = name, let groupIDStr = groupIDStr else {
+                print("Usage: sidesign auth appgroups update --id <group_id> --name <new_name>")
+                exit(1)
+            }
+            let groups = try await portal.fetchAppGroups(for: team, session: session)
+            guard var targetGroup = groups.first(where: { $0.identifier == groupIDStr || $0.groupID == groupIDStr }) else {
+                printError("App Group '\(groupIDStr)' not found.")
+                exit(1)
+            }
+            targetGroup.name = name
+            print("Updating App Group name to '\(name)'...")
+            let updated = try await portal.updateAppGroup(targetGroup, team: team, session: session)
+            print("Successfully updated App Group: \(updated.name) (\(updated.identifier))")
+        } else if args.contains("delete") || args.contains("remove") {
+            var groupIDStr: String?
+            var idx = 1
+            while idx < args.count {
+                if (args[idx] == "--id" || args[idx] == "--group-id") && idx + 1 < args.count {
+                    groupIDStr = args[idx + 1]
+                    idx += 1
+                }
+                idx += 1
+            }
+            guard let groupIDStr = groupIDStr else {
+                print("Usage: sidesign auth appgroups delete --id <group_id>")
+                exit(1)
+            }
+            let groups = try await portal.fetchAppGroups(for: team, session: session)
+            guard let targetGroup = groups.first(where: { $0.identifier == groupIDStr || $0.groupID == groupIDStr }) else {
+                printError("App Group '\(groupIDStr)' not found.")
+                exit(1)
+            }
+            print("Deleting App Group '\(targetGroup.name)' (\(targetGroup.identifier))...")
+            _ = try await portal.deleteAppGroup(targetGroup, team: team, session: session)
+            print("Successfully deleted App Group.")
         } else {
             let groups = try await portal.fetchAppGroups(for: team, session: session)
             if !SideSignLogging.isLoggingEnabled {

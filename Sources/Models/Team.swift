@@ -86,6 +86,15 @@ public struct Team: Sendable, Codable, Equatable, Hashable, Identifiable {
 }
 
 public extension TeamType {
+    var displayName: String {
+        switch self {
+        case .organization: return "Organization"
+        case .individual:   return "Individual"
+        case .free:         return "Free"
+        case .unknown:      return "Unknown"
+        }
+    }
+
     var allowedEntitlements: Set<Entitlement>? {
         switch self {
         case .free:

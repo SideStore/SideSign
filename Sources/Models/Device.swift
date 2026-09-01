@@ -42,18 +42,24 @@ public struct Device: Sendable, Codable, Equatable, Hashable, Identifiable {
     public var identifier: String // UDID
     public var type: DeviceType
     public var osVersion: OperatingSystemVersion?
+    public var deviceID: String?
+    public var status: String?
 
-    public init(name: String, identifier: String, type: DeviceType, osVersion: OperatingSystemVersion? = nil) {
+    public init(name: String, identifier: String, type: DeviceType, osVersion: OperatingSystemVersion? = nil, deviceID: String? = nil, status: String? = nil) {
         self.name = name
         self.identifier = identifier
         self.type = type
         self.osVersion = osVersion
+        self.deviceID = deviceID
+        self.status = status
     }
 
     enum CodingKeys: String, CodingKey {
         case name
         case identifier = "deviceNumber"
+        case deviceID = "deviceId"
         case deviceClass
+        case status
         case type
         case osVersion
     }
@@ -62,6 +68,8 @@ public struct Device: Sendable, Codable, Equatable, Hashable, Identifiable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
         self.identifier = try container.decodeIfPresent(String.self, forKey: .identifier) ?? ""
+        self.deviceID = try container.decodeIfPresent(String.self, forKey: .deviceID)
+        self.status = try container.decodeIfPresent(String.self, forKey: .status)
 
         if let directType = try? container.decodeIfPresent(DeviceType.self, forKey: .type) {
             self.type = directType
@@ -84,6 +92,8 @@ public struct Device: Sendable, Codable, Equatable, Hashable, Identifiable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(name, forKey: .name)
         try container.encode(identifier, forKey: .identifier)
+        try container.encodeIfPresent(deviceID, forKey: .deviceID)
+        try container.encodeIfPresent(status, forKey: .status)
         try container.encode(type, forKey: .type)
         try container.encodeIfPresent(osVersion, forKey: .osVersion)
     }

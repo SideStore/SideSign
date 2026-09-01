@@ -55,10 +55,15 @@ public enum Constants {
 
         public static let listApplicationGroups     = URL(string: "\(servicesBase)/ios/listApplicationGroups.action")!
         public static let addApplicationGroup       = URL(string: "\(servicesBase)/ios/addApplicationGroup.action")!
+        public static let updateApplicationGroup    = URL(string: "\(servicesBase)/ios/updateApplicationGroup.action")!
         public static let assignApplicationGroup    = URL(string: "\(servicesBase)/ios/assignApplicationGroupToAppId.action")!
+        public static let deleteApplicationGroup    = URL(string: "\(servicesBase)/ios/deleteApplicationGroup.action")!
 
         public static let listDevices               = URL(string: "\(servicesBase)/ios/listDevices.action")!
         public static let addDevice                 = URL(string: "\(servicesBase)/ios/addDevice.action")!
+        public static let updateDevice              = URL(string: "\(servicesBase)/ios/updateDevice.action")!
+        public static let disableDevice             = URL(string: "\(servicesBase)/ios/disableDevice.action")!
+        public static let deleteDevice              = URL(string: "\(servicesBase)/ios/deleteDevice.action")!
 
         public static let listCertificates          = URL(string: "\(servicesBase)/ios/listAllDevelopmentCerts.action")!
         public static let submitCSR                 = URL(string: "\(servicesBase)/ios/submitDevelopmentCSR.action")!

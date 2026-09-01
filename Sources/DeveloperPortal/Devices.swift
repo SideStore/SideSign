@@ -73,4 +73,83 @@ public extension DeveloperPortal {
         verboseLog("[SideSign] Registered: \(device.name) (\(device.identifier))")
         return device
     }
+
+    func updateDevice(_ device: Device, team: Team, session: Session) async throws -> Device {
+        debugLog("[SideSign] updateDevice starting...")
+        verboseLog("[SideSign] Name: '\(device.name)', Identifier: '\(device.identifier)', Team: \(team.name)")
+
+        var parameters = [
+            "name": device.name,
+            "deviceNumber": device.identifier
+        ]
+        if let deviceID = device.deviceID {
+            parameters["deviceId"] = deviceID
+        }
+        if let status = device.status {
+            parameters["status"] = status
+        }
+
+        let response: DeviceResponse = try await sendRequest(
+            url: Constants.URLs.updateDevice,
+            additionalParameters: parameters,
+            session: session,
+            team: team
+        )
+
+        let updatedDevice = response.device ?? device
+        debugLog("[SideSign] updateDevice succeeded")
+        return updatedDevice
+    }
+
+    func disableDevice(_ device: Device, team: Team, session: Session) async throws -> Device {
+        debugLog("[SideSign] disableDevice starting...")
+        verboseLog("[SideSign] Identifier: '\(device.identifier)', Team: \(team.name)")
+
+        var parameters = [
+            "deviceNumber": device.identifier,
+            "status": "d"
+        ]
+        if let deviceID = device.deviceID {
+            parameters["deviceId"] = deviceID
+        }
+        if !device.name.isEmpty {
+            parameters["name"] = device.name
+        }
+
+        let response: DeviceResponse = try await sendRequest(
+            url: Constants.URLs.disableDevice,
+            additionalParameters: parameters,
+            session: session,
+            team: team
+        )
+
+        var updated = response.device ?? device
+        if updated.status == nil {
+            updated.status = "d"
+        }
+        debugLog("[SideSign] disableDevice succeeded")
+        return updated
+    }
+
+    func deleteDevice(_ device: Device, team: Team, session: Session) async throws -> Bool {
+        debugLog("[SideSign] deleteDevice starting...")
+        verboseLog("[SideSign] Identifier: '\(device.identifier)', Team: \(team.name)")
+
+        var parameters = [
+            "deviceNumber": device.identifier
+        ]
+        if let deviceID = device.deviceID {
+            parameters["deviceId"] = deviceID
+        }
+
+        let _: EmptyResponse = try await sendRequest(
+            url: Constants.URLs.deleteDevice,
+            additionalParameters: parameters,
+            session: session,
+            team: team
+        )
+
+        debugLog("[SideSign] deleteDevice completed")
+        return true
+    }
 }

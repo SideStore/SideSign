@@ -48,6 +48,28 @@ public extension DeveloperPortal {
         return createdGroup
     }
 
+    func updateAppGroup(_ appGroup: AppGroup, team: Team, session: Session) async throws -> AppGroup {
+        debugLog("[SideSign] updateAppGroup starting...")
+        verboseLog("[SideSign] Name: '\(appGroup.name)', GroupID: '\(appGroup.groupID)', Team: \(team.name)")
+
+        let parameters = [
+            "name": appGroup.name,
+            "applicationGroup": appGroup.groupID,
+            "identifier": appGroup.identifier
+        ]
+
+        let response: AppGroupResponse = try await sendRequest(
+            url: Constants.URLs.updateApplicationGroup,
+            additionalParameters: parameters,
+            session: session,
+            team: team
+        )
+
+        let updated = response.applicationGroup ?? appGroup
+        debugLog("[SideSign] updateAppGroup succeeded (\(updated.identifier))")
+        return updated
+    }
+
     func assignAppGroups(_ appGroups: [AppGroup], to appID: AppID, team: Team, session: Session) async throws -> AppID {
         debugLog("[SideSign] assignAppGroups starting...")
         verboseLog("[SideSign] AppID: \(appID.bundleIdentifier), AppGroups: \(appGroups.map { $0.identifier }), Team: \(team.name)")
@@ -77,5 +99,18 @@ public extension DeveloperPortal {
         let updatedAppID = response.appId ?? appID
         debugLog("[SideSign] assignAppGroups succeeded")
         return updatedAppID
+    }
+
+    func deleteAppGroup(_ appGroup: AppGroup, team: Team, session: Session) async throws -> Bool {
+        debugLog("[SideSign] deleteAppGroup starting...")
+        verboseLog("[SideSign] GroupID: \(appGroup.groupID), Identifier: \(appGroup.identifier), Team: \(team.name)")
+
+        let parameters = [
+            "applicationGroup": appGroup.groupID
+        ]
+
+        let _: EmptyResponse = try await sendRequest(url: Constants.URLs.deleteApplicationGroup, additionalParameters: parameters, session: session, team: team)
+        debugLog("[SideSign] deleteAppGroup completed")
+        return true
     }
 }

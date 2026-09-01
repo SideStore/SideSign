@@ -44,18 +44,28 @@ public protocol DeveloperPortalAPI: Sendable {
     func authenticate(appleID unsanitizedAppleID: String, password: String, anisetteData: AnisetteData, xcodeVersion: String, verificationHandler: DeveloperPortal.VerificationHandler?) async throws -> AuthSession
     func fetchAccount(session: Session) async throws -> Account
     func fetchTeams(for account: Account, session: Session) async throws -> [Team]
-    func fetchDevices(for team: Team, types: DeviceType, session: Session) async throws -> [Device]
-    func registerDevice(name: String, identifier: String, type: DeviceType, team: Team, session: Session) async throws -> Device
+    
     func fetchCertificates(for team: Team, session: Session) async throws -> [X509Certificate]
     func addCertificate(machineName: String, to team: Team, session: Session) async throws -> KeyStore
     func revokeCertificate(_ certificate: X509Certificate, for team: Team, session: Session) async throws -> Bool
+    
+    func fetchDevices(for team: Team, types: DeviceType, session: Session) async throws -> [Device]
+    func registerDevice(name: String, identifier: String, type: DeviceType, team: Team, session: Session) async throws -> Device
+    func updateDevice(_ device: Device, team: Team, session: Session) async throws -> Device
+    func disableDevice(_ device: Device, team: Team, session: Session) async throws -> Device
+    func deleteDevice(_ device: Device, team: Team, session: Session) async throws -> Bool
+    
     func fetchAppIDs(for team: Team, session: Session) async throws -> [AppID]
     func addAppID(withName name: String, bundleIdentifier: String, team: Team, session: Session) async throws -> AppID
     func updateAppID(_ appID: AppID, team: Team, session: Session) async throws -> AppID
     func deleteAppID(_ appID: AppID, for team: Team, session: Session) async throws -> Bool
+    
     func fetchAppGroups(for team: Team, session: Session) async throws -> [AppGroup]
     func addAppGroup(name: String, groupIdentifier: String, team: Team, session: Session) async throws -> AppGroup
+    func updateAppGroup(_ appGroup: AppGroup, team: Team, session: Session) async throws -> AppGroup
     func assignAppGroups(_ appGroups: [AppGroup], to appID: AppID, team: Team, session: Session) async throws -> AppID
+    func deleteAppGroup(_ appGroup: AppGroup, team: Team, session: Session) async throws -> Bool
+
     func fetchProvisioningProfiles(for team: Team, session: Session) async throws -> [ProvisioningProfile]
     func downloadProvisioningProfile(for appID: AppID, deviceType: DeviceType, team: Team, session: Session) async throws -> ProvisioningProfile
     func deleteProvisioningProfile(_ profile: ProvisioningProfile, team: Team, session: Session) async throws -> Bool
