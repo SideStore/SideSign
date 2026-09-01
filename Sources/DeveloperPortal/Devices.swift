@@ -116,17 +116,15 @@ public extension DeveloperPortal {
             parameters["name"] = device.name
         }
 
-        let response: DeviceResponse = try await sendRequest(
+        let _: EmptyResponse = try await sendRequest(
             url: Constants.URLs.disableDevice,
             additionalParameters: parameters,
             session: session,
             team: team
         )
 
-        var updated = response.device ?? device
-        if updated.status == nil {
-            updated.status = "d"
-        }
+        var updated = device
+        updated.status = "d"
         debugLog("[SideSign] disableDevice succeeded")
         return updated
     }
