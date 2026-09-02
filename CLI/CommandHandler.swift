@@ -879,11 +879,18 @@ public enum CommandHandler {
                 let keyStore = try await portal.addCertificate(machineName: "Mac", to: team, session: session)
                 if let out = outPath {
                     let outURL = URL(fileURLWithPath: out)
-                    guard let certData = keyStore.certificate.data else {
-                        throw CLIError.executionFailed("Certificate raw data is unavailable.")
+                    if outURL.pathExtension.lowercased() == "p12" {
+                        let p12Password = options.portalOptions.password ?? keyStore.certificate.serialNumber
+                        let p12Data = try keyStore.exportP12(password: p12Password)
+                        try p12Data.write(to: outURL)
+                        print("PKCS#12 identity saved to: \(outURL.path) (Password: \(p12Password))")
+                    } else {
+                        guard let certData = keyStore.certificate.data else {
+                            throw CLIError.executionFailed("Certificate raw data is unavailable.")
+                        }
+                        try certData.write(to: outURL)
+                        print("Certificate saved to: \(outURL.path)")
                     }
-                    try certData.write(to: outURL)
-                    print("Certificate saved to: \(outURL.path)")
                 } else {
                     print("Successfully created certificate: \(keyStore.certificate.name) (Serial: \(keyStore.certificate.serialNumber))")
                 }
