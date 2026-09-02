@@ -189,8 +189,26 @@ public enum CommandHandler {
 
     public static func handleVerify(context: VerifyContext) throws {
         let targetURL = URL(fileURLWithPath: context.targetPath)
+        let isIPA = targetURL.pathExtension.lowercased() == "ipa"
+
         print("[Verify] Verifying signature for: \(targetURL.path)")
-        let result = CodeSignKit.SignatureVerifier.verify(url: targetURL, deep: context.isDeep, strict: context.isStrict)
+
+        let appURL: URL
+        let workingDir: URL?
+        if isIPA {
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            workingDir = tempDir
+            appURL = try FileManager.default.unzipAppBundle(at: targetURL, to: tempDir)
+        } else {
+            workingDir = nil
+            appURL = targetURL
+        }
+        defer {
+            if let dir = workingDir { try? FileManager.default.removeItem(at: dir) }
+        }
+
+        let result = CodeSignKit.SignatureVerifier.verify(url: appURL, deep: context.isDeep, strict: context.isStrict)
         if result.isValid {
             print("Signature is VALID.")
             if let ident = result.bundleIdentifier { print("Identifier=\(ident)") }
