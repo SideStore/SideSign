@@ -135,22 +135,26 @@ extension FileManager {
         writer.setCompressLevel(compressionLevel.rawValue)
 
 
+        let canonicalBundleURL = appBundleURL.resolvingSymlinksInPath()
+        let basePath = canonicalBundleURL.path.hasSuffix("/") ? canonicalBundleURL.path : canonicalBundleURL.path + "/"
+
         let enumerator = self.enumerator(
-            at: appBundleURL,
+            at: canonicalBundleURL,
             includingPropertiesForKeys: [.isDirectoryKey]
         )!
 
         verboseLog("[SideSign] FileManager.zipAppBundle: enumerating contents of app bundle...")
         for case let fileURL as URL in enumerator {
+            let canonicalFileURL = fileURL.resolvingSymlinksInPath()
+            let isDir = (try? canonicalFileURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
 
-            let isDir = (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
-
-            let relative = fileURL.path
-                .replacingOccurrences(of: appBundleURL.path + "/", with: "")
+            let fullPath = canonicalFileURL.path
+            guard fullPath.hasPrefix(basePath) else { continue }
+            let relative = String(fullPath.dropFirst(basePath.count))
 
             let zipPath = "Payload/\(appBundleURL.lastPathComponent)/\(relative)" + (isDir ? "/" : "")
 
-            let attributes = try self.attributesOfItem(atPath: fileURL.path)
+            let attributes = try self.attributesOfItem(atPath: canonicalFileURL.path)
             let posixPermissions = (attributes[.posixPermissions] as? NSNumber)?.uint32Value ?? (isDir ? Self.defaultDirPermissions : Self.defaultFilePermissions)
 
             verboseLog("[SideSign] FileManager.zipAppBundle: writing zip entry relative: \(relative), path in zip: \(zipPath), isDir: \(isDir), permissions: \(String(format: "%0o", posixPermissions))")
@@ -159,7 +163,7 @@ extension FileManager {
                 let permissions = Self.S_IFDIR + posixPermissions
                 try writer.writeFile(path: zipPath, data: nil, permissions: permissions)
             } else {
-                try writer.addFile(at: fileURL, pathInZip: zipPath)
+                try writer.addFile(at: canonicalFileURL, pathInZip: zipPath)
             }
         }
 
