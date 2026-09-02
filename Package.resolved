@@ -1,5 +1,5 @@
 {
-  "originHash" : "51c892ff08fca21e1508d33e5bc1ea745d53683b5cb93203f95ec837b3b8ecd6",
+  "originHash" : "e35daeb48bf87565f66b6146ac994ba05314ca8b428a6009169828b8d88f1149",
   "pins" : [
     {
       "identity" : "anisettekit",
@@ -16,7 +16,7 @@
       "location" : "https://github.com/mahee96/CodeSignKit.git",
       "state" : {
         "branch" : "main",
-        "revision" : "80c6c0641ccfd7d35c610457fb9227376f81b4f1"
+        "revision" : "30803b81eaf1a7aee11a3294de8db7d3c8eea21f"
       }
     },
     {
