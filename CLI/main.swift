@@ -20,22 +20,6 @@ func printWarning(_ message: String) {
     FileHandle.standardError.write(Data("Warning: \(message)\n".utf8))
 }
 
-func isInteractiveTerminal() -> Bool {
-    #if canImport(Darwin) || os(Linux) || os(Android)
-    return isatty(0) != 0
-    #else
-    return true
-    #endif
-}
-
-func clearStdinBuffer() {
-    #if canImport(Darwin) || os(Linux) || os(Android)
-    if isatty(0) != 0 {
-        tcflush(0, TCIFLUSH)
-    }
-    #endif
-}
-
 func readInteractiveLine(prompt: String, emptyLineBefore: Bool = true, emptyLineAfter: Bool = true) -> String? {
     if emptyLineBefore { print() }
     print(prompt, terminator: "")
@@ -47,13 +31,6 @@ func readInteractiveLine(prompt: String, emptyLineBefore: Bool = true, emptyLine
 
 func readSecurePassword(prompt: String, emptyLineBefore: Bool = true, emptyLineAfter: Bool = true) -> String? {
     if emptyLineBefore { print() }
-    #if canImport(Darwin) || os(Linux) || os(Android)
-    if isatty(0) != 0, let passCStr = getpass(prompt) {
-        let passStr = String(cString: passCStr)
-        if emptyLineAfter { print() }
-        return passStr
-    }
-    #endif
     print(prompt, terminator: "")
     fflush(nil)
     let input = readLine(strippingNewline: true)
@@ -808,29 +785,20 @@ func handleAuth(args: [String]) async throws {
                     loaded = true
                 } catch DeviceDataError.invalidPassword {
                     printError("Invalid device data password.")
-                    if isInteractiveTerminal() {
-                        guard let entered = readSecurePassword(prompt: "Enter password for device data ('\(targetDataURL.lastPathComponent)'): "), !entered.isEmpty else {
-                            exit(1)
-                        }
-                        devPass = entered
-                    } else {
+                    guard let entered = readSecurePassword(prompt: "Enter password for device data ('\(targetDataURL.lastPathComponent)'): "), !entered.isEmpty else {
                         exit(1)
                     }
+                    devPass = entered
                 } catch {
                     printError("Loading device data from '\(targetDataURL.path)': \(error.localizedDescription)")
                     exit(1)
                 }
             } else {
-                if isInteractiveTerminal() {
-                    guard let entered = readSecurePassword(prompt: "Enter password for device data ('\(targetDataURL.lastPathComponent)'): "), !entered.isEmpty else {
-                        printError("Device data password cannot be empty.")
-                        exit(1)
-                    }
-                    devPass = entered
-                } else {
-                    printError("Device data file exists at '\(targetDataURL.path)', but no --devicedata-password was provided in non-interactive mode.")
+                guard let entered = readSecurePassword(prompt: "Enter password for device data ('\(targetDataURL.lastPathComponent)'): "), !entered.isEmpty else {
+                    printError("Device data password cannot be empty.")
                     exit(1)
                 }
+                devPass = entered
             }
         }
     }
@@ -856,23 +824,18 @@ func handleAuth(args: [String]) async throws {
 
     let errorHandler: @Sendable (Error) async throws -> Bool = { error in
         if case AnisetteError.outdatedV1Server(let serverURL, let reason) = error {
-            if isInteractiveTerminal() {
-                print()
-                if let reason = reason, !reason.isEmpty {
-                    printWarning("V3 Anisette is unavailable on '\(serverURL.absoluteString)' (\(reason)).")
-                } else {
-                    printWarning("V3 Anisette is unavailable on '\(serverURL.absoluteString)'.")
-                }
-                printWarning("Falling back to legacy V1 mode uses a shared device identity and may increase the risk of Apple ID lockouts.")
-                let input = readInteractiveLine(prompt: "Do you want to continue with legacy V1 Anisette? [Y/n]: ", emptyLineBefore: false, emptyLineAfter: true)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-                if input == "n" || input == "no" {
-                    return false
-                }
-                return true
+            print()
+            if let reason = reason, !reason.isEmpty {
+                printWarning("V3 Anisette is unavailable on '\(serverURL.absoluteString)' (\(reason)).")
             } else {
-                printWarning("Anisette server '\(serverURL.absoluteString)' is operating in outdated V1 mode (shared device identity).")
-                return true
+                printWarning("V3 Anisette is unavailable on '\(serverURL.absoluteString)'.")
             }
+            printWarning("Falling back to legacy V1 mode uses a shared device identity and may increase the risk of Apple ID lockouts.")
+            let input = readInteractiveLine(prompt: "Do you want to continue with legacy V1 Anisette? [Y/n]: ", emptyLineBefore: false, emptyLineAfter: true)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+            if input == "n" || input == "no" {
+                return false
+            }
+            return true
         }
         return false
     }
@@ -902,7 +865,7 @@ func handleAuth(args: [String]) async throws {
     }
 
     if let freshBlob = newAdiPb {
-        if deviceDataPassword == nil && isInteractiveTerminal() {
+        if deviceDataPassword == nil {
             if let entered = readSecurePassword(prompt: "Enter password to encrypt new device data (\(targetDataURL.lastPathComponent)): "), !entered.isEmpty {
                 deviceDataPassword = entered
             }
@@ -924,16 +887,11 @@ func handleAuth(args: [String]) async throws {
         if let p = password, !p.isEmpty {
             pwd = p
         } else {
-            if isInteractiveTerminal() {
-                guard let entered = readSecurePassword(prompt: "Enter password for \(email): "), !entered.isEmpty else {
-                    printError("Password cannot be empty.")
-                    exit(1)
-                }
-                pwd = entered
-            } else {
-                printError("Password is required for \(email) in non-interactive mode. Use --password <pass>.")
+            guard let entered = readSecurePassword(prompt: "Enter password for \(email): "), !entered.isEmpty else {
+                printError("Password cannot be empty.")
                 exit(1)
             }
+            pwd = entered
         }
 
         print("Authenticating with Apple Developer Portal...")
@@ -1328,7 +1286,6 @@ func handleAuth(args: [String]) async throws {
 }
 
 func handleCLI2FA(mode: TwoFactorMode, completion: @escaping (TwoFactorAction) -> Void) {
-    clearStdinBuffer()
     switch mode {
     case .trustedDevice(let error):
         if let error = error {
@@ -1686,31 +1643,20 @@ func handleAnisette(args: [String]) async throws {
                     loaded = true
                 } catch DeviceDataError.invalidPassword {
                     printError("Invalid device data password.")
-                    if isInteractiveTerminal() {
-                        print("Enter password for device data ('\(targetDataURL.lastPathComponent)'): ", terminator: "")
-                        guard let entered = readLine(strippingNewline: true), !entered.isEmpty else {
-                            exit(1)
-                        }
-                        devPass = entered
-                    } else {
+                    guard let entered = readSecurePassword(prompt: "Enter password for device data ('\(targetDataURL.lastPathComponent)'): "), !entered.isEmpty else {
                         exit(1)
                     }
+                    devPass = entered
                 } catch {
                     printError("Loading device data from '\(targetDataURL.path)': \(error.localizedDescription)")
                     exit(1)
                 }
             } else {
-                if isInteractiveTerminal() {
-                    print("Enter password for device data ('\(targetDataURL.lastPathComponent)'): ", terminator: "")
-                    guard let entered = readLine(strippingNewline: true), !entered.isEmpty else {
-                        printError("Device data password cannot be empty.")
-                        exit(1)
-                    }
-                    devPass = entered
-                } else {
-                    printError("Device data file exists at '\(targetDataURL.path)', but no --devicedata-password was provided in non-interactive mode.")
+                guard let entered = readSecurePassword(prompt: "Enter password for device data ('\(targetDataURL.lastPathComponent)'): "), !entered.isEmpty else {
+                    printError("Device data password cannot be empty.")
                     exit(1)
                 }
+                devPass = entered
             }
         }
     }
@@ -1741,7 +1687,7 @@ func handleAnisette(args: [String]) async throws {
 
     let errorHandler: @Sendable (Error) async throws -> Bool = { error in
         if case AnisetteError.outdatedV1Server(let serverURL, let reason) = error {
-            if isInteractiveTerminal() && !outputJSON {
+            if !outputJSON {
                 print()
                 if let reason = reason, !reason.isEmpty {
                     printWarning("V3 Anisette is unavailable on '\(serverURL.absoluteString)' (\(reason)).")
@@ -1755,9 +1701,6 @@ func handleAnisette(args: [String]) async throws {
                 }
                 return true
             } else {
-                if !outputJSON {
-                    printWarning("Anisette server '\(serverURL.absoluteString)' is operating in outdated V1 mode (shared device identity).")
-                }
                 return true
             }
         }
@@ -1795,9 +1738,8 @@ func handleAnisette(args: [String]) async throws {
     }
 
     if let freshBlob = newAdiPb {
-        if deviceDataPassword == nil && isInteractiveTerminal() {
-            print("Enter password to encrypt new device data (\(targetDataURL.lastPathComponent)): ", terminator: "")
-            if let entered = readLine(strippingNewline: true), !entered.isEmpty {
+        if deviceDataPassword == nil {
+            if let entered = readSecurePassword(prompt: "Enter password to encrypt new device data (\(targetDataURL.lastPathComponent)): "), !entered.isEmpty {
                 deviceDataPassword = entered
             }
         }
