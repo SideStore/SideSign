@@ -135,14 +135,6 @@ extension FileManager {
         writer.setCompressLevel(compressionLevel.rawValue)
 
 
-        let payloadRoot =
-            URL(fileURLWithPath: "Payload", isDirectory: true)
-
-        let bundleRoot =
-            payloadRoot.appendingPathComponent(
-                appBundleURL.lastPathComponent
-            )
-
         let enumerator = self.enumerator(
             at: appBundleURL,
             includingPropertiesForKeys: [.isDirectoryKey]
@@ -156,9 +148,7 @@ extension FileManager {
             let relative = fileURL.path
                 .replacingOccurrences(of: appBundleURL.path + "/", with: "")
 
-            let zipPath =
-                bundleRoot.appendingPathComponent(relative).path +
-                (isDir ? "/" : "")
+            let zipPath = "Payload/\(appBundleURL.lastPathComponent)/\(relative)" + (isDir ? "/" : "")
 
             let attributes = try self.attributesOfItem(atPath: fileURL.path)
             let posixPermissions = (attributes[.posixPermissions] as? NSNumber)?.uint32Value ?? (isDir ? Self.defaultDirPermissions : Self.defaultFilePermissions)
