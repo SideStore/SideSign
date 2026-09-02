@@ -12,17 +12,6 @@ import CodeSignKit
 import GSACryptoKit
 import AnisetteKit
 
-#if canImport(Darwin)
-import Darwin
-#elseif canImport(Glibc)
-import Glibc
-#elseif canImport(Musl)
-import Musl
-#elseif canImport(WinSDK)
-import WinSDK
-import ucrt
-#endif
-
 func printError(_ message: String) {
     FileHandle.standardError.write(Data("Error: \(message)\n".utf8))
 }
@@ -32,28 +21,14 @@ func printWarning(_ message: String) {
 }
 
 func isInteractiveTerminal() -> Bool {
-    #if os(Windows)
-    return _isatty(_fileno(__acrt_iob_func(0))) != 0
-    #else
-    return isatty(fileno(stdin)) != 0
-    #endif
-}
-
-func clearStdinBuffer() {
-    #if canImport(Darwin) || os(Linux)
-    if isInteractiveTerminal() {
-        tcflush(fileno(stdin), TCIFLUSH)
-    }
-    #endif
+    return isatty(FileHandle.standardInput.fileDescriptor) != 0
 }
 
 func readInteractiveLine(prompt: String, emptyLineBefore: Bool = true, emptyLineAfter: Bool = true) -> String? {
     if isInteractiveTerminal() {
         if emptyLineBefore { print() }
-        fflush(stdout)
-        clearStdinBuffer()
         print(prompt, terminator: "")
-        fflush(stdout)
+        fflush(nil)
         let line = readLine(strippingNewline: true)
         if emptyLineAfter { print() }
         return line
@@ -65,8 +40,6 @@ func readInteractiveLine(prompt: String, emptyLineBefore: Bool = true, emptyLine
 func readSecurePassword(prompt: String, emptyLineBefore: Bool = true, emptyLineAfter: Bool = true) -> String? {
     if isInteractiveTerminal() {
         if emptyLineBefore { print() }
-        fflush(stdout)
-        clearStdinBuffer()
         #if canImport(Darwin) || os(Linux)
         if let passCStr = getpass(prompt) {
             let passStr = String(cString: passCStr)
@@ -77,7 +50,7 @@ func readSecurePassword(prompt: String, emptyLineBefore: Bool = true, emptyLineA
         return nil
         #else
         print(prompt, terminator: "")
-        fflush(stdout)
+        fflush(nil)
         let input = readLine(strippingNewline: true)
         if emptyLineAfter { print() }
         return input

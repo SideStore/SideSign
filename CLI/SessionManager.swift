@@ -86,11 +86,7 @@ public struct SessionManager: Sendable {
         let isPasswordMode = (password != nil && !password!.isEmpty)
         let magic = isPasswordMode ? Constants.Session.passMagic : Constants.Session.autoMagic
 
-        var salt = Data(count: Constants.Session.saltLength)
-        let saltResult = salt.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, Constants.Session.saltLength, $0.baseAddress!) }
-        if saltResult != errSecSuccess {
-            salt = Data((0..<Constants.Session.saltLength).map { _ in UInt8.random(in: 0...255) })
-        }
+        let salt = SymmetricKey(size: .init(byteCount: Constants.Session.saltLength)).withUnsafeBytes { Data($0) }
 
         let symmetricKey: SymmetricKey
         if let pwd = password, !pwd.isEmpty {
