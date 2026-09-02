@@ -14,14 +14,6 @@ import AnisetteKit
 
 public enum CommandHandler {
 
-    public static var exitHandler: @Sendable (Int32) -> Never = { code in
-        Darwin.exit(code)
-    }
-
-    public static func terminate(code: Int32 = 1) -> Never {
-        exitHandler(code)
-    }
-
     public static func printError(_ message: String) {
         FileHandle.standardError.write(Data("Error: \(message)\n".utf8))
     }
@@ -43,11 +35,10 @@ public enum CommandHandler {
         return SecureInput.readPassword(prompt: prompt, emptyLineBefore: emptyLineBefore, emptyLineAfter: emptyLineAfter)
     }
 
-    public static func resolveTeamIDFromIndex(_ indexStr: String?) -> String {
+    public static func resolveTeamIDFromIndex(_ indexStr: String?) throws -> String {
         let sessions = SessionManager.listSessions().filter { $0.teamID != nil }
         guard !sessions.isEmpty else {
-            printError("No saved team sessions found in '\(SessionManager.defaultSessionDirectory.path)'. Run 'sidesign dev login' first.")
-            terminate(code: 1)
+            throw CLIError.executionFailed("No saved team sessions found in '\(SessionManager.defaultSessionDirectory.path)'. Run 'sidesign dev login' first.")
         }
 
         let targetIndex: Int
@@ -60,26 +51,23 @@ public enum CommandHandler {
             }
             guard let entered = readInteractiveLine(prompt: "Select team (1-\(sessions.count)): "),
                   let parsed = Int(entered) else {
-                printError("Invalid selection.")
-                terminate(code: 1)
+                throw CLIError.invalidArgument("Invalid team selection.")
             }
             targetIndex = parsed
         }
 
         guard targetIndex >= 1 && targetIndex <= sessions.count else {
-            printError("Invalid team index \(targetIndex). Available range: 1...\(sessions.count). Run 'sidesign dev list'.")
-            terminate(code: 1)
+            throw CLIError.invalidArgument("Invalid team index \(targetIndex). Available range: 1...\(sessions.count). Run 'sidesign dev list'.")
         }
         return sessions[targetIndex - 1].teamID!
     }
 
-    public static func validateAndResolveTeamID(_ teamID: String) -> String {
+    public static func validateAndResolveTeamID(_ teamID: String) throws -> String {
         let targetURL = SessionManager.url(for: teamID)
         guard FileManager.default.fileExists(atPath: targetURL.path) else {
             let available = SessionManager.listSessions().compactMap { $0.teamID }
             let listStr = available.isEmpty ? "none" : available.joined(separator: ", ")
-            printError("No saved session found for Team ID '\(teamID)'. Available teams: [\(listStr)]. Run 'sidesign dev list'.")
-            terminate(code: 1)
+            throw CLIError.executionFailed("No saved session found for Team ID '\(teamID)'. Available teams: [\(listStr)]. Run 'sidesign dev list'.")
         }
         return teamID
     }
@@ -88,14 +76,12 @@ public enum CommandHandler {
         let targetURL = URL(fileURLWithPath: context.targetPath)
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: targetURL.path, isDirectory: &isDir) else {
-            printError("Target path does not exist: \(context.targetPath)")
-            terminate(code: 1)
+            throw CLIError.executionFailed("Target path does not exist: \(context.targetPath)")
         }
 
         let p12URL = URL(fileURLWithPath: context.p12Path)
         guard FileManager.default.fileExists(atPath: p12URL.path) else {
-            printError("P12 file does not exist: \(context.p12Path)")
-            terminate(code: 1)
+            throw CLIError.executionFailed("P12 file does not exist: \(context.p12Path)")
         }
 
         let p12Data = try Data(contentsOf: p12URL)
@@ -124,8 +110,7 @@ public enum CommandHandler {
                 if let profile = ProvisioningProfile(data: profData) {
                     profiles.append(profile)
                 } else {
-                    printError("Could not parse provisioning profile at \(profilePath)")
-                    terminate(code: 1)
+                    throw CLIError.executionFailed("Could not parse provisioning profile at \(profilePath)")
                 }
             }
 
@@ -212,11 +197,8 @@ public enum CommandHandler {
             if let team = result.teamIdentifier { print("TeamIdentifier=\(team)") }
             if let cdHash = result.cdHash { print("CDHash=\(cdHash)") }
         } else {
-            print("Signature is INVALID.")
-            for err in result.errors {
-                print("  - \(err)")
-            }
-            terminate(code: 1)
+            let errorMsg = result.errors.joined(separator: "\n  - ")
+            throw CLIError.executionFailed("Signature is INVALID.\n  - \(errorMsg)")
         }
     }
 
@@ -235,8 +217,7 @@ public enum CommandHandler {
 
             let appURL = isIPA ? try FileManager.default.unzipAppBundle(at: targetURL, to: workingDir) : targetURL
             guard let app = AppBundle(fileURL: appURL) else {
-                printError("Unable to parse AppBundle at \(appURL.path)")
-                terminate(code: 1)
+                throw CLIError.executionFailed("Unable to parse AppBundle at \(appURL.path)")
             }
 
             let executableName = app.bundle.infoDictionary?["CFBundleExecutable"] as? String ?? app.name
@@ -274,8 +255,7 @@ public enum CommandHandler {
             let execURL: URL
             if isDir.boolValue {
                 guard let exec = CodeSignKit.MachOParser.findExecutable(at: targetURL) else {
-                    printError("Could not find executable inside bundle \(context.targetPath)")
-                    terminate(code: 1)
+                    throw CLIError.executionFailed("Could not find executable inside bundle \(context.targetPath)")
                 }
                 execURL = exec
             } else {
@@ -283,8 +263,7 @@ public enum CommandHandler {
             }
 
             guard let parser = try? CodeSignKit.MachOParser(url: execURL) else {
-                printError("Failed to parse Mach-O binary at \(execURL.path)")
-                terminate(code: 1)
+                throw CLIError.executionFailed("Failed to parse Mach-O binary at \(execURL.path)")
             }
 
             if context.dumpEntitlements {
@@ -323,8 +302,7 @@ public enum CommandHandler {
         let fileURL = URL(fileURLWithPath: context.profilePath)
         let data = try Data(contentsOf: fileURL)
         guard let profile = ProvisioningProfile(data: data) else {
-            printError("Could not parse provisioning profile at \(context.profilePath)")
-            terminate(code: 1)
+            throw CLIError.executionFailed("Could not parse provisioning profile at \(context.profilePath)")
         }
 
         switch context.action {
@@ -354,8 +332,7 @@ public enum CommandHandler {
         case .validate:
             let isExpired = profile.expirationDate < Date()
             if isExpired {
-                print("Profile is EXPIRED on \(profile.expirationDate).")
-                terminate(code: 1)
+                throw CLIError.executionFailed("Profile is EXPIRED on \(profile.expirationDate).")
             } else {
                 print("Profile is VALID (expires on \(profile.expirationDate)).")
             }
@@ -372,8 +349,7 @@ public enum CommandHandler {
 
         let appURL = isIPA ? try FileManager.default.unzipAppBundle(at: targetURL, to: workingDir) : targetURL
         guard let app = AppBundle(fileURL: appURL) else {
-            printError("Failed to parse AppBundle at \(appURL.path)")
-            terminate(code: 1)
+            throw CLIError.executionFailed("Failed to parse AppBundle at \(appURL.path)")
         }
 
         switch context.action {
@@ -479,8 +455,7 @@ public enum CommandHandler {
         switch context.action {
         case .listServers(let sourceURL):
             guard let url = URL(string: sourceURL) else {
-                printError("Invalid server list URL: \(sourceURL)")
-                terminate(code: 1)
+                throw CLIError.invalidArgument("Invalid server list URL: \(sourceURL)")
             }
             print("Fetching Anisette servers from \(url.absoluteString)...")
             let provider = AnisetteDataProvider.shared
@@ -515,15 +490,13 @@ public enum CommandHandler {
             let mode: AnisetteMode
             if enableFailover {
                 guard let sourceStr = sourceURLStr, let listURL = URL(string: sourceStr) else {
-                    printError("--source <url> is required when using --failover.")
-                    terminate(code: 1)
+                    throw CLIError.missingRequiredArgument("--source <url> is required when using --failover.")
                 }
                 let serverData = try await AnisetteDataProvider.shared.fetchServerList(from: listURL)
                 let visible = serverData.servers.filter { !$0.isHidden }
                 failoverURLs = visible.compactMap { URL(string: $0.address) }
                 guard !failoverURLs.isEmpty else {
-                    printError("No active servers found in catalog '\(listURL.absoluteString)'.")
-                    terminate(code: 1)
+                    throw CLIError.executionFailed("No active servers found in catalog '\(listURL.absoluteString)'.")
                 }
                 mode = .remote(server: failoverURLs.first!)
             } else if let dir = localDir {
@@ -534,13 +507,12 @@ public enum CommandHandler {
                 if strict {
                     let isValid = await AnisetteDataProvider.validateServer(url: url, strict: true)
                     guard isValid else {
-                        printError("Strict validation failed for remote server '\(url.absoluteString)'. Endpoint is not ready or not returning valid Anisette payload.")
-                        terminate(code: 1)
+                        throw CLIError.executionFailed("Strict validation failed for remote server '\(url.absoluteString)'. Endpoint is not ready or not returning valid Anisette payload.")
                     }
                 }
                 mode = .remote(server: url)
             } else {
-                printError("""
+                throw CLIError.missingRequiredArgument("""
                 An Anisette mode is required. Specify one of:
                   --server <url>                 (Direct remote Anisette server)
                   --local <dir>                  (Local ADI library directory)
@@ -548,7 +520,6 @@ public enum CommandHandler {
                   --select-server --source <url> (Select interactively from catalog)
                   --failover --source <url>      (Automatic catalog failover)
                 """)
-                terminate(code: 1)
             }
 
             var existingData: DeviceData? = nil
@@ -566,17 +537,15 @@ public enum CommandHandler {
                         } catch DeviceDataError.invalidPassword {
                             printError("Invalid device data password.")
                             guard let entered = readSecurePassword(prompt: "Enter password for device data ('\(targetDataURL.lastPathComponent)'): "), !entered.isEmpty else {
-                                terminate(code: 1)
+                                throw CLIError.executionFailed("Operation cancelled.")
                             }
                             devPass = entered
                         } catch {
-                            printError("Loading device data from '\(targetDataURL.path)': \(error.localizedDescription)")
-                            terminate(code: 1)
+                            throw CLIError.executionFailed("Loading device data from '\(targetDataURL.path)': \(error.localizedDescription)")
                         }
                     } else {
                         guard let entered = readSecurePassword(prompt: "Enter password for device data ('\(targetDataURL.lastPathComponent)'): "), !entered.isEmpty else {
-                            printError("Device data password cannot be empty.")
-                            terminate(code: 1)
+                            throw CLIError.missingRequiredArgument("Device data password cannot be empty.")
                         }
                         devPass = entered
                     }
@@ -754,14 +723,14 @@ public enum CommandHandler {
     }
 
     private static func handleAuthSelectTeam(index: String?) throws {
-        let targetID = resolveTeamIDFromIndex(index)
+        let targetID = try resolveTeamIDFromIndex(index)
         try SessionManager.setActiveSession(forTeamID: targetID)
         print("Active team set to: \(targetID)")
         print("Updated default session: \(SessionManager.defaultSessionURL.path)")
     }
 
     private static func handleAuthSelectTeamID(teamID: String) throws {
-        let targetID = validateAndResolveTeamID(teamID)
+        let targetID = try validateAndResolveTeamID(teamID)
         try SessionManager.setActiveSession(forTeamID: targetID)
         print("Active team set to: \(targetID)")
         print("Updated default session: \(SessionManager.defaultSessionURL.path)")
@@ -776,16 +745,14 @@ public enum CommandHandler {
     private static func handleAuthStatus(sessionPath: String?, password: String?, encryptPassword: String?, teamID: String?) throws {
         let sessionURL = sessionPath.map { URL(fileURLWithPath: $0) } ?? SessionManager.url(for: teamID)
         guard SessionManager.hasSession(at: sessionURL) else {
-            printError("No active session found at '\(sessionURL.path)'. Please run: sidesign dev login --apple-id <apple-id>")
-            terminate(code: 1)
+            throw CLIError.executionFailed("No active session found at '\(sessionURL.path)'. Please run: sidesign dev login --apple-id <apple-id>")
         }
         let authSession: AuthSession
         do {
             authSession = try SessionManager.load(from: sessionURL, password: password ?? encryptPassword)
         } catch SessionStorageError.invalidPassword {
             guard let entered = readSecurePassword(prompt: "Enter session decryption password: "), !entered.isEmpty else {
-                printError("Password required to decrypt session.")
-                terminate(code: 1)
+                throw CLIError.missingRequiredArgument("Password required to decrypt session.")
             }
             authSession = try SessionManager.load(from: sessionURL, password: entered)
         }
@@ -798,8 +765,7 @@ public enum CommandHandler {
     private static func handleAuthRelogin(options: PortalOptions) async throws {
         let sessionURL = options.sessionPath.map { URL(fileURLWithPath: $0) } ?? SessionManager.url(for: options.teamID)
         guard SessionManager.hasSession(at: sessionURL) else {
-            printError("No active session found at '\(sessionURL.path)' to relogin. Please run: sidesign dev login --apple-id <apple-id>")
-            terminate(code: 1)
+            throw CLIError.executionFailed("No active session found at '\(sessionURL.path)' to relogin. Please run: sidesign dev login --apple-id <apple-id>")
         }
         let email: String
         do {
@@ -807,8 +773,7 @@ public enum CommandHandler {
             email = existingSession.account.appleID
         } catch SessionStorageError.invalidPassword {
             guard let entered = readSecurePassword(prompt: "Enter session decryption password: "), !entered.isEmpty else {
-                printError("Password required to decrypt session.")
-                terminate(code: 1)
+                throw CLIError.missingRequiredArgument("Password required to decrypt session.")
             }
             let existingSession = try SessionManager.load(from: sessionURL, password: entered)
             email = existingSession.account.appleID
@@ -862,8 +827,7 @@ public enum CommandHandler {
             case .update(let name, let udid):
                 let devices = try await portal.fetchDevices(for: team, session: session)
                 guard var targetDevice = devices.first(where: { $0.identifier == udid || $0.deviceID == udid }) else {
-                    printError("Device '\(udid)' not found.")
-                    terminate(code: 1)
+                    throw CLIError.executionFailed("Device '\(udid)' not found.")
                 }
                 targetDevice.name = name
                 print("Updating device name to '\(name)'...")
@@ -873,8 +837,7 @@ public enum CommandHandler {
             case .disable(let udid):
                 let devices = try await portal.fetchDevices(for: team, session: session)
                 guard let targetDevice = devices.first(where: { $0.identifier == udid || $0.deviceID == udid }) else {
-                    printError("Device '\(udid)' not found.")
-                    terminate(code: 1)
+                    throw CLIError.executionFailed("Device '\(udid)' not found.")
                 }
                 print("Disabling device '\(targetDevice.name)' (\(targetDevice.identifier))...")
                 let disabled = try await portal.disableDevice(targetDevice, team: team, session: session)
@@ -883,8 +846,7 @@ public enum CommandHandler {
             case .delete(let udid):
                 let devices = try await portal.fetchDevices(for: team, session: session)
                 guard let targetDevice = devices.first(where: { $0.identifier == udid || $0.deviceID == udid }) else {
-                    printError("Device '\(udid)' not found.")
-                    terminate(code: 1)
+                    throw CLIError.executionFailed("Device '\(udid)' not found.")
                 }
                 print("Deleting device '\(targetDevice.name)' (\(targetDevice.identifier))...")
                 _ = try await portal.deleteDevice(targetDevice, team: team, session: session)
@@ -916,8 +878,7 @@ public enum CommandHandler {
                 if let csrFile = csrPath {
                     let csrData = try Data(contentsOf: URL(fileURLWithPath: csrFile))
                     guard let csrString = String(data: csrData, encoding: .utf8) else {
-                        printError("Could not read CSR string from \(csrFile)")
-                        terminate(code: 1)
+                        throw CLIError.executionFailed("Could not read CSR string from \(csrFile)")
                     }
                     print("Requesting Development Certificate from Apple...")
                     let cert = try await portal.createCertificate(csr: csrString, type: .development, team: team, session: session)
@@ -941,7 +902,7 @@ public enum CommandHandler {
                     _ = try await portal.revokeCertificate(targetCert, for: team, session: session)
                     print("Certificate revoked successfully.")
                 } else {
-                    printError("Certificate ID not found.")
+                    throw CLIError.executionFailed("Certificate ID not found.")
                 }
 
             case .list:
@@ -973,7 +934,7 @@ public enum CommandHandler {
                     _ = try await portal.deleteAppID(target, for: team, session: session)
                     print("Successfully deleted App ID: \(target.name) (\(target.bundleIdentifier))")
                 } else {
-                    printError("App ID '\(targetID)' not found.")
+                    throw CLIError.executionFailed("App ID '\(targetID)' not found.")
                 }
 
             case .list:
@@ -1002,13 +963,11 @@ public enum CommandHandler {
             case .assign(let appIDStr, let groupIDStr):
                 let appIDs = try await portal.fetchAppIDs(for: team, session: session)
                 guard let targetAppID = appIDs.first(where: { $0.identifier == appIDStr || $0.bundleIdentifier == appIDStr }) else {
-                    printError("App ID '\(appIDStr)' not found.")
-                    terminate(code: 1)
+                    throw CLIError.executionFailed("App ID '\(appIDStr)' not found.")
                 }
                 let groups = try await portal.fetchAppGroups(for: team, session: session)
                 guard let targetGroup = groups.first(where: { $0.identifier == groupIDStr || $0.groupID == groupIDStr }) else {
-                    printError("App Group '\(groupIDStr)' not found.")
-                    terminate(code: 1)
+                    throw CLIError.executionFailed("App Group '\(groupIDStr)' not found.")
                 }
                 let updated = try await portal.assignAppGroups([targetGroup], to: targetAppID, team: team, session: session)
                 print("Successfully assigned group to App ID: \(updated.name)")
@@ -1016,8 +975,7 @@ public enum CommandHandler {
             case .update(let name, let groupIDStr):
                 let groups = try await portal.fetchAppGroups(for: team, session: session)
                 guard var targetGroup = groups.first(where: { $0.identifier == groupIDStr || $0.groupID == groupIDStr }) else {
-                    printError("App Group '\(groupIDStr)' not found.")
-                    terminate(code: 1)
+                    throw CLIError.executionFailed("App Group '\(groupIDStr)' not found.")
                 }
                 targetGroup.name = name
                 print("Updating App Group name to '\(name)'...")
@@ -1027,8 +985,7 @@ public enum CommandHandler {
             case .delete(let groupIDStr):
                 let groups = try await portal.fetchAppGroups(for: team, session: session)
                 guard let targetGroup = groups.first(where: { $0.identifier == groupIDStr || $0.groupID == groupIDStr }) else {
-                    printError("App Group '\(groupIDStr)' not found.")
-                    terminate(code: 1)
+                    throw CLIError.executionFailed("App Group '\(groupIDStr)' not found.")
                 }
                 print("Deleting App Group '\(targetGroup.name)' (\(targetGroup.identifier))...")
                 _ = try await portal.deleteAppGroup(targetGroup, team: team, session: session)
@@ -1055,8 +1012,7 @@ public enum CommandHandler {
             case .download(let bundleID, let outputPath):
                 let appIDs = try await portal.fetchAppIDs(for: team, session: session)
                 guard let targetAppID = appIDs.first(where: { $0.bundleIdentifier == bundleID || $0.identifier == bundleID }) else {
-                    printError("App ID '\(bundleID)' not found.")
-                    terminate(code: 1)
+                    throw CLIError.executionFailed("App ID '\(bundleID)' not found.")
                 }
                 print("Downloading Provisioning Profile for \(targetAppID.bundleIdentifier)...")
                 let profile = try await portal.downloadProvisioningProfile(for: targetAppID, deviceType: .iPhone, team: team, session: session)
@@ -1074,7 +1030,7 @@ public enum CommandHandler {
                     _ = try await portal.deleteProvisioningProfile(target, team: team, session: session)
                     print("Successfully deleted Provisioning Profile: \(target.name)")
                 } else {
-                    printError("Provisioning Profile '\(profID)' not found.")
+                    throw CLIError.executionFailed("Provisioning Profile '\(profID)' not found.")
                 }
 
             case .list:
@@ -1102,8 +1058,7 @@ public enum CommandHandler {
             pwd = p
         } else {
             guard let entered = readSecurePassword(prompt: "Enter password for \(appleID): "), !entered.isEmpty else {
-                printError("Password cannot be empty.")
-                terminate(code: 1)
+                throw CLIError.missingRequiredArgument("Password cannot be empty.")
             }
             pwd = entered
         }
@@ -1121,8 +1076,8 @@ public enum CommandHandler {
 
         var discoveredTeamID: String? = options.teamID
         if discoveredTeamID == nil {
-            let teams = try? await portal.fetchTeams(for: authSession.account, session: authSession.session)
-            discoveredTeamID = teams?.first?.identifier
+            let teams = try await portal.fetchTeams(for: authSession.account, session: authSession.session)
+            discoveredTeamID = teams.first?.identifier
         }
 
         if let tID = discoveredTeamID {
@@ -1137,8 +1092,8 @@ public enum CommandHandler {
                     machineID: anisetteData.machineID,
                     localUserID: anisetteData.localUserID
                 )
-                try? DeviceDataManager.save(teamMachineData, to: DeviceDataManager.url(for: tID), password: devPass)
-                try? DeviceDataManager.save(teamMachineData, to: DeviceDataManager.defaultURL, password: devPass)
+                try DeviceDataManager.save(teamMachineData, to: DeviceDataManager.url(for: tID), password: devPass)
+                try DeviceDataManager.save(teamMachineData, to: DeviceDataManager.defaultURL, password: devPass)
             }
             print("Authentication successful! Session saved for Team: \(tID)")
         } else {
@@ -1156,8 +1111,7 @@ public enum CommandHandler {
     ) async throws {
         let target = options.sessionPath.map { URL(fileURLWithPath: $0) } ?? SessionManager.url(for: options.teamID)
         guard SessionManager.hasSession(at: target) else {
-            printError("No active session found at '\(target.path)'. Please run: sidesign dev login --apple-id <apple-id>")
-            terminate(code: 1)
+            throw CLIError.executionFailed("No active session found at '\(target.path)'. Please run: sidesign dev login --apple-id <apple-id>")
         }
 
         let authSession: AuthSession
@@ -1165,8 +1119,7 @@ public enum CommandHandler {
             authSession = try SessionManager.load(from: target, password: options.password ?? options.encryptPassword)
         } catch SessionStorageError.invalidPassword {
             guard let entered = readSecurePassword(prompt: "Enter session decryption password: "), !entered.isEmpty else {
-                printError("Password required to decrypt session.")
-                terminate(code: 1)
+                throw CLIError.missingRequiredArgument("Password required to decrypt session.")
             }
             authSession = try SessionManager.load(from: target, password: entered)
         }
@@ -1182,13 +1135,9 @@ public enum CommandHandler {
             try await operation(portal, account, session)
         } catch {
             if case DeveloperPortalError.incorrectCredentials(let cause) = error {
-                printError("Authentication session expired or credentials changed: \(cause ?? error.localizedDescription)")
-                printError("Please re-authenticate by running: sidesign dev relogin")
-                terminate(code: 1)
+                throw CLIError.executionFailed("Authentication session expired or credentials changed: \(cause ?? error.localizedDescription)\nPlease re-authenticate by running: sidesign dev relogin")
             } else if error.localizedDescription.contains("401") || error.localizedDescription.localizedCaseInsensitiveContains("unauthorized") || error.localizedDescription.localizedCaseInsensitiveContains("session") {
-                printError("Developer portal session has expired or credentials have changed.")
-                printError("Please re-authenticate by running: sidesign dev relogin")
-                terminate(code: 1)
+                throw CLIError.executionFailed("Developer portal session has expired or credentials have changed.\nPlease re-authenticate by running: sidesign dev relogin")
             }
             throw error
         }
@@ -1204,15 +1153,13 @@ public enum CommandHandler {
         let mode: AnisetteMode
         if options.enableFailover {
             guard let sourceStr = options.sourceURLStr, let listURL = URL(string: sourceStr) else {
-                printError("--source <url> is required when using --failover.")
-                terminate(code: 1)
+                throw CLIError.missingRequiredArgument("--source <url> is required when using --failover.")
             }
             let serverData = try await AnisetteDataProvider.shared.fetchServerList(from: listURL)
             let visible = serverData.servers.filter { !$0.isHidden }
             failoverURLs = visible.compactMap { URL(string: $0.address) }
             guard !failoverURLs.isEmpty else {
-                printError("No active servers found in catalog '\(listURL.absoluteString)'.")
-                terminate(code: 1)
+                throw CLIError.executionFailed("No active servers found in catalog '\(listURL.absoluteString)'.")
             }
             mode = .remote(server: failoverURLs.first!)
         } else if let dir = options.localAnisetteDir {
@@ -1223,13 +1170,12 @@ public enum CommandHandler {
             if options.strict {
                 let isValid = await AnisetteDataProvider.validateServer(url: url, strict: true)
                 guard isValid else {
-                    printError("Strict validation failed for remote server '\(url.absoluteString)'.")
-                    terminate(code: 1)
+                    throw CLIError.executionFailed("Strict validation failed for remote server '\(url.absoluteString)'.")
                 }
             }
             mode = .remote(server: url)
         } else {
-            printError("""
+            throw CLIError.missingRequiredArgument("""
             An Anisette mode is required. Specify one of:
               --server <url>                 (Direct remote Anisette server)
               --local <dir>                  (Local ADI library directory)
@@ -1237,7 +1183,6 @@ public enum CommandHandler {
               --select-server --source <url> (Select interactively from catalog)
               --failover --source <url>      (Automatic catalog failover)
             """)
-            terminate(code: 1)
         }
 
         var existingData: DeviceData? = nil
@@ -1255,17 +1200,15 @@ public enum CommandHandler {
                     } catch DeviceDataError.invalidPassword {
                         printError("Invalid device data password.")
                         guard let entered = readSecurePassword(prompt: "Enter password for device data ('\(targetDataURL.lastPathComponent)'): "), !entered.isEmpty else {
-                            terminate(code: 1)
+                            throw CLIError.executionFailed("Operation cancelled.")
                         }
                         devPass = entered
                     } catch {
-                        printError("Loading device data from '\(targetDataURL.path)': \(error.localizedDescription)")
-                        terminate(code: 1)
+                        throw CLIError.executionFailed("Loading device data from '\(targetDataURL.path)': \(error.localizedDescription)")
                     }
                 } else {
                     guard let entered = readSecurePassword(prompt: "Enter password for device data ('\(targetDataURL.lastPathComponent)'): "), !entered.isEmpty else {
-                        printError("Device data password cannot be empty.")
-                        terminate(code: 1)
+                        throw CLIError.missingRequiredArgument("Device data password cannot be empty.")
                     }
                     devPass = entered
                 }
@@ -1409,8 +1352,7 @@ public enum CommandHandler {
 
     private static func selectAnisetteServerInteractively(sourceURLString: String? = nil) async throws -> String {
         guard let sourceStr = sourceURLString, let url = URL(string: sourceStr) else {
-            printError("--source <url> is required for interactive server selection.")
-            terminate(code: 1)
+            throw CLIError.missingRequiredArgument("--source <url> is required for interactive server selection.")
         }
 
         print("Fetching available Anisette servers from \(url.host ?? url.absoluteString)...")
@@ -1419,8 +1361,7 @@ public enum CommandHandler {
 
         let visibleServers = data.servers.filter { !$0.isHidden }
         guard !visibleServers.isEmpty else {
-            printError("No servers found in server list.")
-            terminate(code: 1)
+            throw CLIError.executionFailed("No servers found in server list.")
         }
 
         print("\nAvailable Anisette Servers:")
@@ -1433,8 +1374,7 @@ public enum CommandHandler {
         guard let input = readLine(strippingNewline: true),
               let choice = Int(input),
               choice >= 1 && choice <= visibleServers.count else {
-            printError("Invalid selection.")
-            terminate(code: 1)
+            throw CLIError.invalidArgument("Invalid selection.")
         }
 
         let selected = visibleServers[choice - 1].address

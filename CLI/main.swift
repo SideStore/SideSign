@@ -9,12 +9,92 @@
 import Foundation
 import SideSign
 
-func terminate(code: Int32 = 0) -> Never {
-    exit(code)
+func ~= (pattern: [String]?, value: String) -> Bool {
+    return pattern?.contains(value) ?? false
 }
 
-CommandHandler.exitHandler = { code in
-    terminate(code: code)
+private enum FlagRegistry {
+    static let commands: [String: [String]] = [
+        "sign":             ["sign", "-s", "--sign"],
+        "verify":           ["verify", "-v", "--verify"],
+        "display":          ["display", "inspect", "-d", "--display", "--inspect", "info"],
+        "profile":          ["profile", "-p", "--profile", "prof"],
+        "extensions":       ["extensions", "-e", "--extensions", "ext"],
+        "archive":          ["archive", "-a", "--archive", "arc"],
+        "dev":              ["dev", "developer", "portal", "auth"],
+        "p12":              ["p12", "pkcs12"],
+        "csr":              ["csr"],
+        "anisette":         ["anisette", "-ani", "--anisette", "ani"],
+        "removeSignature":  ["remove-signature", "--remove-signature", "unsign", "rs", "rm-sig"]
+    ]
+
+    static let sign: [String: [String]] = [
+        "p12":              ["--p12", "-p"],
+        "password":         ["--password", "-pwd", "-w", "--pass"],
+        "profile":          ["--profile", "-m", "-prof"],
+        "bundleID":         ["--bundle-id", "-b", "-i", "--id"],
+        "usingTeam":        ["--using-team", "-t"],
+        "usingTeamID":      ["--using-team-id", "--use-team", "-tid"],
+        "entitlements":     ["--entitlements", "-e"],
+        "output":           ["--output", "-o"]
+    ]
+
+    static let verify: [String: [String]] = [
+        "deep":             ["--deep", "-d"],
+        "strict":           ["--strict", "-s"]
+    ]
+
+    static let inspect: [String: [String]] = [
+        "entitlements":     ["--entitlements", "-e"],
+        "requirements":     ["--requirements", "-r"]
+    ]
+
+    static let extensions: [String: [String]] = [
+        "all":              ["--all", "-a"],
+        "id":               ["--id", "--bundle-id", "-i", "-b"],
+        "output":           ["--output", "-o"]
+    ]
+
+    static let p12Create: [String: [String]] = [
+        "cert":             ["--cert", "-c"],
+        "key":              ["--key", "-k"],
+        "password":         ["--password", "-p", "-pwd"],
+        "output":           ["--output", "-o"]
+    ]
+
+    static let p12Extract: [String: [String]] = [
+        "input":            ["--input", "-i"],
+        "password":         ["--password", "-p", "-pwd"],
+        "outputCert":       ["--output-cert", "-oc", "-c"],
+        "outputKey":        ["--output-key", "-ok", "-k"]
+    ]
+
+    static let csr: [String: [String]] = [
+        "name":             ["--name", "-n"],
+        "org":              ["--org", "-o"],
+        "country":          ["--country", "-c"],
+        "state":            ["--state", "-s"],
+        "locality":         ["--locality", "-l"],
+        "outputCSR":        ["--output-csr", "-oc", "-csr"],
+        "outputKey":        ["--output-key", "-ok", "-key"]
+    ]
+
+    static let anisette: [String: [String]] = [
+        "json":             ["--json", "-j"],
+        "strict":           ["--strict", "-st"],
+        "machinePassword":  ["--machine-password", "--adi-password", "-mpwd", "-pwd"],
+        "machinePath":      ["--machine-path", "--adi-path", "-mp"],
+        "usingTeam":        ["--using-team", "--select-team", "-t"],
+        "usingTeamID":      ["--using-team-id", "--select-team-id", "--use-team", "-tid"],
+        "local":            ["--local", "--local-adi", "-l"],
+        "oda":              ["--oda", "-oda"],
+        "server":           ["--server", "--url", "-srv", "-u"],
+        "source":           ["--source", "--list", "-src"],
+        "anisetteUDID":     ["--anisette-device-udid", "--anisette-udid", "-udid"],
+        "selectServer":     ["--select-server", "-sel", "-s"],
+        "failover":         ["--failover", "--auto-failover", "-f"],
+        "startIndex":       ["--start-index", "-idx"]
+    ]
 }
 
 func printUsage() {
@@ -66,11 +146,11 @@ func printUsage() {
 
       # Select active default team (by list index or Team ID):
       sidesign dev select-team 1
-      sidesign dev select-team-id 8884ZS2845
+      sidesign dev select-team-id TEAM123456
 
       # Use a specific Team's session (by list index or Team ID):
       sidesign dev certs -t 1
-      sidesign dev certs -tid 8884ZS2845
+      sidesign dev certs -tid TEAM123456
 
       # Login with interactive Anisette server selection:
       sidesign dev login -u developer@example.com -sel
@@ -107,7 +187,8 @@ func printUsage() {
     """)
 }
 
-private func parseSignContext(args: [String]) -> SignContext {
+private func parseSignContext(args: [String]) throws -> SignContext {
+    let flags = FlagRegistry.sign
     var targetPath: String?
     var p12Path: String?
     var password = ""
@@ -118,42 +199,36 @@ private func parseSignContext(args: [String]) -> SignContext {
     var outputPath: String?
 
     var i = 0
+    func nextVal() -> String? {
+        guard i + 1 < args.count, !args[i + 1].hasPrefix("-") else { return nil }
+        i += 1
+        return args[i]
+    }
+
     while i < args.count {
         let arg = args[i]
-        if arg == "--p12" || arg == "-p" {
-            if i + 1 < args.count { p12Path = args[i + 1]; i += 1 }
-        } else if arg == "--password" || arg == "-pwd" || arg == "-w" || arg == "--pass" {
-            if i + 1 < args.count { password = args[i + 1]; i += 1 }
-        } else if arg == "--profile" || arg == "-m" || arg == "-prof" {
-            if i + 1 < args.count { profilePath = args[i + 1]; i += 1 }
-        } else if arg == "--bundle-id" || arg == "-b" || arg == "-i" || arg == "--id" {
-            if i + 1 < args.count { bundleID = args[i + 1]; i += 1 }
-        } else if arg == "--using-team" || arg == "-t" {
-            let nextVal = (i + 1 < args.count && !args[i + 1].hasPrefix("-")) ? args[i + 1] : nil
-            if nextVal != nil { i += 1 }
-            teamID = CommandHandler.resolveTeamIDFromIndex(nextVal)
-        } else if arg == "--using-team-id" || arg == "--use-team" || arg == "-tid" {
-            if i + 1 < args.count {
-                teamID = CommandHandler.validateAndResolveTeamID(args[i + 1])
-                i += 1
+        switch arg {
+        case flags["p12"]:              p12Path          = nextVal()
+        case flags["password"]:         password         = nextVal() ?? ""
+        case flags["profile"]:          profilePath      = nextVal()
+        case flags["bundleID"]:         bundleID         = nextVal()
+        case flags["usingTeam"]:        teamID           = try CommandHandler.resolveTeamIDFromIndex(nextVal())
+        case flags["usingTeamID"]:      teamID           = try nextVal().map { try CommandHandler.validateAndResolveTeamID($0) }
+        case flags["entitlements"]:     entitlementsPath = nextVal()
+        case flags["output"]:           outputPath       = nextVal()
+        default:
+            if !arg.hasPrefix("-") && targetPath == nil {
+                targetPath = arg
             }
-        } else if arg == "--entitlements" || arg == "-e" {
-            if i + 1 < args.count { entitlementsPath = args[i + 1]; i += 1 }
-        } else if arg == "--output" || arg == "-o" {
-            if i + 1 < args.count { outputPath = args[i + 1]; i += 1 }
-        } else if !arg.hasPrefix("-") && targetPath == nil {
-            targetPath = arg
         }
         i += 1
     }
 
     guard let target = targetPath else {
-        CommandHandler.printError("No target IPA, .app, or binary specified.")
-        terminate(code: 1)
+        throw CLIError.missingRequiredArgument("No target IPA, .app, or binary specified.")
     }
     guard let p12 = p12Path else {
-        CommandHandler.printError("P12 certificate is required for signing (--p12 <path>).")
-        terminate(code: 1)
+        throw CLIError.missingRequiredArgument("P12 certificate is required for signing (--p12 <path>).")
     }
 
     return SignContext(
@@ -168,58 +243,59 @@ private func parseSignContext(args: [String]) -> SignContext {
     )
 }
 
-private func parseVerifyContext(args: [String]) -> VerifyContext {
+private func parseVerifyContext(args: [String]) throws -> VerifyContext {
+    let flags = FlagRegistry.verify
     var targetPath: String?
     var isDeep = false
     var isStrict = false
 
     for arg in args {
-        if arg == "--deep" || arg == "-d" {
-            isDeep = true
-        } else if arg == "--strict" || arg == "-s" {
-            isStrict = true
-        } else if !arg.hasPrefix("-") && targetPath == nil {
-            targetPath = arg
+        switch arg {
+        case flags["deep"]:   isDeep   = true
+        case flags["strict"]: isStrict = true
+        default:
+            if !arg.hasPrefix("-") && targetPath == nil {
+                targetPath = arg
+            }
         }
     }
 
     guard let target = targetPath else {
-        CommandHandler.printError("No target specified for verification.")
-        terminate(code: 1)
+        throw CLIError.missingRequiredArgument("No target specified for verification.")
     }
     return VerifyContext(targetPath: target, isDeep: isDeep, isStrict: isStrict)
 }
 
-private func parseInspectContext(args: [String]) -> InspectContext {
+private func parseInspectContext(args: [String]) throws -> InspectContext {
+    let flags = FlagRegistry.inspect
     var targetPath: String?
     var dumpEntitlements = false
     var dumpRequirements = false
 
     for arg in args {
-        if arg == "--entitlements" || arg == "-e" {
-            dumpEntitlements = true
-        } else if arg == "--requirements" || arg == "-r" {
-            dumpRequirements = true
-        } else if !arg.hasPrefix("-") && targetPath == nil {
-            targetPath = arg
+        switch arg {
+        case flags["entitlements"]: dumpEntitlements = true
+        case flags["requirements"]: dumpRequirements = true
+        default:
+            if !arg.hasPrefix("-") && targetPath == nil {
+                targetPath = arg
+            }
         }
     }
 
     guard let target = targetPath else {
-        CommandHandler.printError("No target specified for display/inspection.")
-        terminate(code: 1)
+        throw CLIError.missingRequiredArgument("No target specified for display/inspection.")
     }
     return InspectContext(targetPath: target, dumpEntitlements: dumpEntitlements, dumpRequirements: dumpRequirements)
 }
 
-private func parseProfileContext(args: [String]) -> ProfileContext {
+private func parseProfileContext(args: [String]) throws -> ProfileContext {
     guard args.count >= 2 else {
-        CommandHandler.printError("""
+        throw CLIError.missingRequiredArgument("""
         Usage:
           sidesign profile dump <path/to/profile.mobileprovision>
           sidesign profile validate <path/to/profile.mobileprovision>
         """)
-        terminate(code: 1)
     }
 
     let actionStr = args[0]
@@ -229,20 +305,18 @@ private func parseProfileContext(args: [String]) -> ProfileContext {
     case "dump", "inspect", "-d": action = .dump
     case "validate", "-v":        action = .validate
     default:
-        CommandHandler.printError("Unknown profile action: \(actionStr)")
-        terminate(code: 1)
+        throw CLIError.invalidArgument("Unknown profile action: \(actionStr)")
     }
     return ProfileContext(action: action, profilePath: path)
 }
 
-private func parseExtensionsContext(args: [String]) -> ExtensionsContext {
+private func parseExtensionsContext(args: [String]) throws -> ExtensionsContext {
     guard args.count >= 2 else {
-        CommandHandler.printError("""
+        throw CLIError.missingRequiredArgument("""
         Usage:
           sidesign extensions list <app_or_ipa>
           sidesign extensions remove <app_or_ipa> [--all | --id <bundle_id>] [--output <path>]
         """)
-        terminate(code: 1)
     }
 
     let actionStr = args[0]
@@ -252,36 +326,40 @@ private func parseExtensionsContext(args: [String]) -> ExtensionsContext {
     case "list", "ls", "-l":
         return ExtensionsContext(targetPath: target, action: .list)
     case "remove", "rm", "-r":
+        let flags = FlagRegistry.extensions
         var removeAll = false
         var targetID: String?
         var outputPath: String?
 
         var idx = 2
+        func nextVal() -> String? {
+            guard idx + 1 < args.count, !args[idx + 1].hasPrefix("-") else { return nil }
+            idx += 1
+            return args[idx]
+        }
+
         while idx < args.count {
-            let a = args[idx]
-            if a == "--all" || a == "-a" { removeAll = true }
-            else if a == "--id" || a == "--bundle-id" || a == "-i" || a == "-b" {
-                if idx + 1 < args.count { targetID = args[idx + 1]; idx += 1 }
-            } else if a == "--output" || a == "-o" {
-                if idx + 1 < args.count { outputPath = args[idx + 1]; idx += 1 }
+            switch args[idx] {
+            case flags["all"]:      removeAll  = true
+            case flags["id"]:       targetID   = nextVal()
+            case flags["output"]:   outputPath = nextVal()
+            default:                break
             }
             idx += 1
         }
         return ExtensionsContext(targetPath: target, action: .remove(all: removeAll, targetID: targetID, outputPath: outputPath))
     default:
-        CommandHandler.printError("Unknown extensions action: \(actionStr)")
-        terminate(code: 1)
+        throw CLIError.invalidArgument("Unknown extensions action: \(actionStr)")
     }
 }
 
-private func parseArchiveContext(args: [String]) -> ArchiveContext {
+private func parseArchiveContext(args: [String]) throws -> ArchiveContext {
     guard args.count >= 2 else {
-        CommandHandler.printError("""
+        throw CLIError.missingRequiredArgument("""
         Usage:
           sidesign archive unzip <input.ipa> [--output <directory>]
           sidesign archive zip <input.app> [--output <output.ipa>]
         """)
-        terminate(code: 1)
     }
 
     let actionStr = args[0]
@@ -297,72 +375,88 @@ private func parseArchiveContext(args: [String]) -> ArchiveContext {
     case "zip", "pack", "-z":
         return ArchiveContext(action: .zip(inputPath: input, outputPath: outputPath))
     default:
-        CommandHandler.printError("Unknown archive action: \(actionStr)")
-        terminate(code: 1)
+        throw CLIError.invalidArgument("Unknown archive action: \(actionStr)")
     }
 }
 
-private func parseP12Context(args: [String]) -> P12Context {
+private func parseP12Context(args: [String]) throws -> P12Context {
     guard args.count >= 1 else {
-        CommandHandler.printError("""
+        throw CLIError.missingRequiredArgument("""
         Usage:
           sidesign p12 create --cert <cert.cer/der> --key <private.key> [--password <pwd>] --output <out.p12>
           sidesign p12 extract --input <in.p12> [--password <pwd>] --output-cert <cert.der> --output-key <key.der>
         """)
-        terminate(code: 1)
     }
 
     let actionStr = args[0]
     switch actionStr {
     case "create", "make", "-c":
+        let flags = FlagRegistry.p12Create
         var certPath: String?
         var keyPath: String?
         var password: String?
         var outputPath: String?
 
         var idx = 1
+        func nextVal() -> String? {
+            guard idx + 1 < args.count, !args[idx + 1].hasPrefix("-") else { return nil }
+            idx += 1
+            return args[idx]
+        }
+
         while idx < args.count {
-            if (args[idx] == "--cert" || args[idx] == "-c") && idx + 1 < args.count { certPath = args[idx + 1]; idx += 1 }
-            if (args[idx] == "--key" || args[idx] == "-k") && idx + 1 < args.count { keyPath = args[idx + 1]; idx += 1 }
-            if (args[idx] == "--password" || args[idx] == "-p" || args[idx] == "-pwd") && idx + 1 < args.count { password = args[idx + 1]; idx += 1 }
-            if (args[idx] == "--output" || args[idx] == "-o") && idx + 1 < args.count { outputPath = args[idx + 1]; idx += 1 }
+            switch args[idx] {
+            case flags["cert"]:     certPath   = nextVal()
+            case flags["key"]:      keyPath    = nextVal()
+            case flags["password"]: password   = nextVal()
+            case flags["output"]:   outputPath = nextVal()
+            default:                break
+            }
             idx += 1
         }
 
         guard let cert = certPath, let key = keyPath, let out = outputPath else {
-            CommandHandler.printError("Usage: sidesign p12 create --cert <cert.cer> --key <key.key> [--password <pwd>] --output <out.p12>")
-            terminate(code: 1)
+            throw CLIError.missingRequiredArgument("Usage: sidesign p12 create --cert <cert.cer> --key <key.key> [--password <pwd>] --output <out.p12>")
         }
         return P12Context(action: .create(certPath: cert, keyPath: key, password: password, outputPath: out))
 
     case "extract", "-x":
+        let flags = FlagRegistry.p12Extract
         var inputPath: String?
         var password: String?
         var outCertPath: String?
         var outKeyPath: String?
 
         var idx = 1
+        func nextVal() -> String? {
+            guard idx + 1 < args.count, !args[idx + 1].hasPrefix("-") else { return nil }
+            idx += 1
+            return args[idx]
+        }
+
         while idx < args.count {
-            if (args[idx] == "--input" || args[idx] == "-i") && idx + 1 < args.count { inputPath = args[idx + 1]; idx += 1 }
-            if (args[idx] == "--password" || args[idx] == "-p" || args[idx] == "-pwd") && idx + 1 < args.count { password = args[idx + 1]; idx += 1 }
-            if (args[idx] == "--output-cert" || args[idx] == "-oc" || args[idx] == "-c") && idx + 1 < args.count { outCertPath = args[idx + 1]; idx += 1 }
-            if (args[idx] == "--output-key" || args[idx] == "-ok" || args[idx] == "-k") && idx + 1 < args.count { outKeyPath = args[idx + 1]; idx += 1 }
+            switch args[idx] {
+            case flags["input"]:        inputPath   = nextVal()
+            case flags["password"]:     password    = nextVal()
+            case flags["outputCert"]:   outCertPath = nextVal()
+            case flags["outputKey"]:    outKeyPath  = nextVal()
+            default:                    break
+            }
             idx += 1
         }
 
         guard let input = inputPath, let outCert = outCertPath, let outKey = outKeyPath else {
-            CommandHandler.printError("Usage: sidesign p12 extract --input <in.p12> [--password <pwd>] --output-cert <cert.der> --output-key <key.der>")
-            terminate(code: 1)
+            throw CLIError.missingRequiredArgument("Usage: sidesign p12 extract --input <in.p12> [--password <pwd>] --output-cert <cert.der> --output-key <key.der>")
         }
         return P12Context(action: .extract(inputPath: input, password: password, outCertPath: outCert, outKeyPath: outKey))
 
     default:
-        CommandHandler.printError("Unknown p12 action: \(actionStr)")
-        terminate(code: 1)
+        throw CLIError.invalidArgument("Unknown p12 action: \(actionStr)")
     }
 }
 
-private func parseCSRContext(args: [String]) -> CSRContext {
+private func parseCSRContext(args: [String]) throws -> CSRContext {
+    let flags = FlagRegistry.csr
     var commonName = "SideSign"
     var org = "SideSign"
     var country = "US"
@@ -372,24 +466,31 @@ private func parseCSRContext(args: [String]) -> CSRContext {
     var outKey: String?
 
     var idx = 0
+    func nextVal() -> String? {
+        guard idx + 1 < args.count, !args[idx + 1].hasPrefix("-") else { return nil }
+        idx += 1
+        return args[idx]
+    }
+
     while idx < args.count {
-        let a = args[idx]
-        if a == "--name" || a == "-n" { if idx + 1 < args.count { commonName = args[idx + 1]; idx += 1 } }
-        else if a == "--org" || a == "-o" { if idx + 1 < args.count { org = args[idx + 1]; idx += 1 } }
-        else if a == "--country" || a == "-c" { if idx + 1 < args.count { country = args[idx + 1]; idx += 1 } }
-        else if a == "--state" || a == "-s" { if idx + 1 < args.count { state = args[idx + 1]; idx += 1 } }
-        else if a == "--locality" || a == "-l" { if idx + 1 < args.count { locality = args[idx + 1]; idx += 1 } }
-        else if a == "--output-csr" || a == "-oc" || a == "-csr" { if idx + 1 < args.count { outCSR = args[idx + 1]; idx += 1 } }
-        else if a == "--output-key" || a == "-ok" || a == "-key" { if idx + 1 < args.count { outKey = args[idx + 1]; idx += 1 } }
+        switch args[idx] {
+        case flags["name"]:         commonName = nextVal() ?? commonName
+        case flags["org"]:          org        = nextVal() ?? org
+        case flags["country"]:      country    = nextVal() ?? country
+        case flags["state"]:        state      = nextVal() ?? state
+        case flags["locality"]:     locality   = nextVal() ?? locality
+        case flags["outputCSR"]:    outCSR     = nextVal()
+        case flags["outputKey"]:    outKey     = nextVal()
+        default:                    break
+        }
         idx += 1
     }
 
     guard let csrPath = outCSR, let keyPath = outKey else {
-        CommandHandler.printError("""
+        throw CLIError.missingRequiredArgument("""
         Usage:
           sidesign csr create [--name <commonName>] [--org <org>] --output-csr <request.csr> --output-key <private.key>
         """)
-        terminate(code: 1)
     }
 
     return CSRContext(
@@ -403,28 +504,36 @@ private func parseCSRContext(args: [String]) -> CSRContext {
     )
 }
 
-private func parseAnisetteContext(args: [String]) -> AnisetteContext {
+private func parseAnisetteContext(args: [String]) throws -> AnisetteContext {
     if args.first == "servers" || args.first == "list" || args.first == "ls" {
         var sourceURLStr: String?
         var idx = 1
+        func nextVal() -> String? {
+            guard idx + 1 < args.count, !args[idx + 1].hasPrefix("-") else { return nil }
+            idx += 1
+            return args[idx]
+        }
+
         while idx < args.count {
             let a = args[idx]
-            if (a == "--source" || a == "--list" || a == "--url" || a == "-u" || a == "-src") && idx + 1 < args.count {
-                sourceURLStr = args[idx + 1]
-                idx += 1
-            } else if a.hasPrefix("http://") || a.hasPrefix("https://") {
-                sourceURLStr = a
+            switch a {
+            case "--source", "--list", "--url", "-u", "-src":
+                sourceURLStr = nextVal()
+            default:
+                if a.hasPrefix("http://") || a.hasPrefix("https://") {
+                    sourceURLStr = a
+                }
             }
             idx += 1
         }
 
         guard let src = sourceURLStr else {
-            CommandHandler.printError("Server list URL is required. Usage: sidesign anisette servers --source <url>")
-            terminate(code: 1)
+            throw CLIError.missingRequiredArgument("Server list URL is required. Usage: sidesign anisette servers --source <url>")
         }
         return AnisetteContext(action: .listServers(sourceURL: src))
     }
 
+    let flags = FlagRegistry.anisette
     var serverURL: String?
     var localDir: String?
     var odaURL: String?
@@ -440,46 +549,33 @@ private func parseAnisetteContext(args: [String]) -> AnisetteContext {
     var strict = false
 
     var idx = 0
+    func nextVal() -> String? {
+        guard idx + 1 < args.count, !args[idx + 1].hasPrefix("-") else { return nil }
+        idx += 1
+        return args[idx]
+    }
+
     while idx < args.count {
-        let a = args[idx]
-        if a == "--json" || a == "-j" { asJSON = true }
-        else if a == "--strict" || a == "-st" { strict = true }
-        else if (a == "--machine-password" || a == "--adi-password" || a == "-mpwd" || a == "-pwd") && idx + 1 < args.count {
-            deviceDataPassword = args[idx + 1]
-            idx += 1
-        } else if (a == "--machine-path" || a == "--adi-path" || a == "-mp") && idx + 1 < args.count {
-            deviceDataPath = args[idx + 1]
-            idx += 1
-        } else if a == "--using-team" || a == "--select-team" || a == "-t" {
-            let nextVal = (idx + 1 < args.count && !args[idx + 1].hasPrefix("-")) ? args[idx + 1] : nil
-            if nextVal != nil { idx += 1 }
-            teamID = CommandHandler.resolveTeamIDFromIndex(nextVal)
-        } else if (a == "--using-team-id" || a == "--select-team-id" || a == "--use-team" || a == "-tid") && idx + 1 < args.count {
-            teamID = CommandHandler.validateAndResolveTeamID(args[idx + 1])
-            idx += 1
-        } else if (a == "--local" || a == "--local-adi" || a == "-l") && idx + 1 < args.count {
-            localDir = args[idx + 1]
-            idx += 1
-        } else if (a == "--oda" || a == "-oda") && idx + 1 < args.count {
-            odaURL = args[idx + 1]
-            idx += 1
-        } else if (a == "--server" || a == "--url" || a == "-srv" || a == "-u") && idx + 1 < args.count {
-            serverURL = args[idx + 1]
-            idx += 1
-        } else if (a == "--source" || a == "--list" || a == "-src") && idx + 1 < args.count {
-            sourceURLStr = args[idx + 1]
-            idx += 1
-        } else if (a == "--anisette-device-udid" || a == "--anisette-udid" || a == "-udid") && idx + 1 < args.count {
-            anisetteDeviceUDID = args[idx + 1]
-            idx += 1
-        } else if a == "--select-server" || a == "-sel" || a == "-s" {
-            selectServer = true
-        } else if a == "--failover" || a == "--auto-failover" || a == "-f" {
-            enableFailover = true
-        } else if (a == "--start-index" || a == "-idx") && idx + 1 < args.count {
-            if let idxVal = Int(args[idx + 1]) { startIndex = idxVal; idx += 1 }
-        } else if a.hasPrefix("http://") || a.hasPrefix("https://") {
-            serverURL = a
+        let arg = args[idx]
+        switch arg {
+        case flags["json"]:             asJSON             = true
+        case flags["strict"]:           strict             = true
+        case flags["machinePassword"]:  deviceDataPassword = nextVal()
+        case flags["machinePath"]:      deviceDataPath     = nextVal()
+        case flags["usingTeam"]:        teamID             = try CommandHandler.resolveTeamIDFromIndex(nextVal())
+        case flags["usingTeamID"]:      teamID             = try nextVal().map { try CommandHandler.validateAndResolveTeamID($0) }
+        case flags["local"]:            localDir           = nextVal()
+        case flags["oda"]:              odaURL             = nextVal()
+        case flags["server"]:           serverURL          = nextVal()
+        case flags["source"]:           sourceURLStr       = nextVal()
+        case flags["anisetteUDID"]:     anisetteDeviceUDID = nextVal()
+        case flags["selectServer"]:     selectServer       = true
+        case flags["failover"]:         enableFailover     = true
+        case flags["startIndex"]:       startIndex         = nextVal().flatMap(Int.init) ?? 0
+        default:
+            if arg.hasPrefix("http://") || arg.hasPrefix("https://") {
+                serverURL = arg
+            }
         }
         idx += 1
     }
@@ -501,451 +597,82 @@ private func parseAnisetteContext(args: [String]) -> AnisetteContext {
     ))
 }
 
-private func parsePortalOptions(args: [String]) -> (options: PortalOptions, appleID: String?) {
-    var appleID: String?
-    var password: String?
-    var sessionPath: String?
-    var encryptPassword: String?
-    var deviceDataPath: String?
-    var deviceDataPassword: String?
-    var teamID: String?
-    var anisetteURL: String?
-    var localAnisetteDir: String?
-    var odaURL: String?
-    var selectServer = false
-    var strict = false
-
-    var sourceURLStr: String?
-    var enableFailover = false
-    var startIndex = 0
-
-    var i = 0
-    while i < args.count {
-        let a = args[i]
-        if a == "--apple-id" || a == "-u" || a == "-a" {
-            if i + 1 < args.count { appleID = args[i + 1]; i += 1 }
-        } else if a == "--password" || a == "-p" || a == "-pwd" || a == "-w" {
-            if i + 1 < args.count { password = args[i + 1]; i += 1 }
-        } else if a == "--session" || a == "--session-file" || a == "-s" {
-            if i + 1 < args.count { sessionPath = args[i + 1]; i += 1 }
-        } else if a == "--using-team" || a == "--select-team" || a == "-t" {
-            let nextVal = (i + 1 < args.count && !args[i + 1].hasPrefix("-")) ? args[i + 1] : nil
-            if nextVal != nil { i += 1 }
-            teamID = CommandHandler.resolveTeamIDFromIndex(nextVal)
-        } else if a == "--using-team-id" || a == "--select-team-id" || a == "--use-team" || a == "-tid" {
-            if i + 1 < args.count {
-                teamID = CommandHandler.validateAndResolveTeamID(args[i + 1])
-                i += 1
-            }
-        } else if a == "--encrypt-password" || a == "-ep" {
-            if i + 1 < args.count { encryptPassword = args[i + 1]; i += 1 }
-        } else if a == "--machine-password" || a == "--adi-password" || a == "-mpwd" {
-            if i + 1 < args.count { deviceDataPassword = args[i + 1]; i += 1 }
-        } else if a == "--machine-path" || a == "--adi-path" || a == "-mp" {
-            if i + 1 < args.count { deviceDataPath = args[i + 1]; i += 1 }
-        } else if a == "--anisette-url" || a == "--anisette" || a == "--server" || a == "-srv" {
-            if i + 1 < args.count { anisetteURL = args[i + 1]; i += 1 }
-        } else if a == "--local-anisette" || a == "--local-adi" || a == "--local" || a == "-l" {
-            if i + 1 < args.count { localAnisetteDir = args[i + 1]; i += 1 }
-        } else if a == "--oda" || a == "-oda" {
-            if i + 1 < args.count { odaURL = args[i + 1]; i += 1 }
-        } else if a == "--source" || a == "--list" || a == "-src" {
-            if i + 1 < args.count { sourceURLStr = args[i + 1]; i += 1 }
-        } else if a == "--select-server" || a == "-sel" {
-            selectServer = true
-        } else if a == "--failover" || a == "--auto-failover" || a == "-f" {
-            enableFailover = true
-        } else if a == "--start-index" || a == "-idx" {
-            if i + 1 < args.count, let idxVal = Int(args[i + 1]) { startIndex = idxVal; i += 1 }
-        } else if a == "--strict" || a == "-st" {
-            strict = true
-        }
-        i += 1
+private func run(rawArgs: [String]) async throws {
+    if rawArgs.isEmpty || rawArgs.contains("-h") || rawArgs.contains("--help") || rawArgs.contains("help") {
+        printUsage()
+        return
     }
 
-    let opts = PortalOptions(
-        sessionPath: sessionPath,
-        password: password,
-        encryptPassword: encryptPassword,
-        deviceDataPath: deviceDataPath,
-        deviceDataPassword: deviceDataPassword,
-        teamID: teamID,
-        anisetteURL: anisetteURL,
-        localAnisetteDir: localAnisetteDir,
-        odaURL: odaURL,
-        selectServer: selectServer,
-        strict: strict,
-        sourceURLStr: sourceURLStr,
-        enableFailover: enableFailover,
-        startIndex: startIndex
-    )
-    return (opts, appleID)
-}
-
-private func parsePortalRequestContext(args: [String]) -> PortalRequestContext {
-    guard !args.isEmpty else {
-        CommandHandler.printError("""
-        Usage:
-          sidesign dev login --apple-id <email> [--password <pwd>] [--session <path>] [--encrypt-password <pwd>]
-          sidesign dev relogin [--session <path>] [--password <pwd>]
-          sidesign dev logout [--session <path>]
-          sidesign dev status [--session <path>] [--password <pwd>]
-          sidesign dev list
-          sidesign dev select-team <index>
-          sidesign dev select-team-id <team_id>
-          sidesign dev teams [--session <path>]
-          sidesign dev devices list / register --name <name> --udid <udid> [--session <path>]
-          sidesign dev certs list / create / revoke --id <id> [--session <path>]
-          sidesign dev appids list / register --name <name> --bundle-id <id> / delete --id <id> [--session <path>]
-          sidesign dev appgroups list / create --name <name> --group-id <id> / assign --app-id <id> --group-id <id> [--session <path>]
-          sidesign dev profiles list / download --bundle-id <id> [--output <path>] / delete --id <id> [--session <path>]
-        """)
-        terminate(code: 1)
+    if rawArgs.contains("--verbose") || rawArgs.contains("-v") || rawArgs.contains("-vv") || rawArgs.contains("--debug") || rawArgs.contains("-d") {
+        SideSignLogging.setLogging(true)
     }
 
-    let action = args[0]
-    let subArgs = Array(args.dropFirst())
-    let (portalOpts, appleID) = parsePortalOptions(args: subArgs)
+    print()
+    defer { print() }
 
-    if action == "list" || action == "sessions" || action == "ls" {
-        return .list
+    let nonGlobalArgs = rawArgs.filter { !["-v", "--verbose", "-vv", "--debug", "-d"].contains($0) }
+    guard let command = nonGlobalArgs.first else {
+        printUsage()
+        return
     }
+    let subArgs = Array(nonGlobalArgs.dropFirst())
 
-    if action == "select-team" || action == "set-team" {
-        let index = subArgs.first
-        return .selectTeam(index: index)
-    }
-
-    if action == "select-team-id" || action == "set-team-id" {
-        guard let tID = subArgs.first else {
-            CommandHandler.printError("Team ID required (e.g. sidesign dev select-team-id 8884ZS2845)")
-            terminate(code: 1)
-        }
-        return .selectTeamID(teamID: tID)
-    }
-
-    if action == "logout" {
-        return .logout(sessionPath: portalOpts.sessionPath, teamID: portalOpts.teamID)
-    }
-
-    if action == "status" {
-        return .status(sessionPath: portalOpts.sessionPath, password: portalOpts.password, encryptPassword: portalOpts.encryptPassword, teamID: portalOpts.teamID)
-    }
-
-    if action == "relogin" {
-        return .relogin(portalOpts)
-    }
-
-    if action == "login" {
-        guard let email = appleID else {
-            CommandHandler.printError("Apple ID is required for login (--apple-id <email>).")
-            terminate(code: 1)
-        }
-        return .login(PortalLoginOptions(appleID: email, portalOptions: portalOpts))
-    }
-
-    if action == "teams" {
-        return .teams(portalOpts)
-    }
-
-    if action == "devices" {
-        let subAction: PortalDeviceOptions.Action
-        if subArgs.contains("register") || subArgs.contains("add") {
-            var name: String?
-            var udid: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--name" || subArgs[idx] == "-n") && idx + 1 < subArgs.count { name = subArgs[idx + 1]; idx += 1 }
-                if (subArgs[idx] == "--udid" || subArgs[idx] == "-u" || subArgs[idx] == "--id" || subArgs[idx] == "-i") && idx + 1 < subArgs.count { udid = subArgs[idx + 1]; idx += 1 }
-                idx += 1
-            }
-            guard let devName = name, let devUDID = udid else {
-                CommandHandler.printError("Usage: sidesign dev devices register --name <name> --udid <udid>")
-                terminate(code: 1)
-            }
-            subAction = .register(name: devName, udid: devUDID)
-        } else if subArgs.contains("update") || subArgs.contains("rename") {
-            var name: String?
-            var udid: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--name" || subArgs[idx] == "-n") && idx + 1 < subArgs.count { name = subArgs[idx + 1]; idx += 1 }
-                if (subArgs[idx] == "--udid" || subArgs[idx] == "-u" || subArgs[idx] == "--id" || subArgs[idx] == "-i") && idx + 1 < subArgs.count { udid = subArgs[idx + 1]; idx += 1 }
-                idx += 1
-            }
-            guard let name = name, let udid = udid else {
-                CommandHandler.printError("Usage: sidesign dev devices update --udid <udid> --name <new_name>")
-                terminate(code: 1)
-            }
-            subAction = .update(name: name, udid: udid)
-        } else if subArgs.contains("disable") {
-            var udid: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--udid" || subArgs[idx] == "-u" || subArgs[idx] == "--id" || subArgs[idx] == "-i") && idx + 1 < subArgs.count { udid = subArgs[idx + 1]; idx += 1 }
-                idx += 1
-            }
-            guard let udid = udid else {
-                CommandHandler.printError("Usage: sidesign dev devices disable --udid <udid>")
-                terminate(code: 1)
-            }
-            subAction = .disable(udid: udid)
-        } else if subArgs.contains("delete") || subArgs.contains("remove") || subArgs.contains("rm") {
-            var udid: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--udid" || subArgs[idx] == "-u" || subArgs[idx] == "--id" || subArgs[idx] == "-i") && idx + 1 < subArgs.count { udid = subArgs[idx + 1]; idx += 1 }
-                idx += 1
-            }
-            guard let udid = udid else {
-                CommandHandler.printError("Usage: sidesign dev devices delete --udid <udid>")
-                terminate(code: 1)
-            }
-            subAction = .delete(udid: udid)
-        } else {
-            subAction = .list
-        }
-        return .devices(PortalDeviceOptions(action: subAction, portalOptions: portalOpts))
-    }
-
-    if action == "certs" {
-        let subAction: PortalCertOptions.Action
-        if subArgs.contains("create") || subArgs.contains("add") {
-            var csrPath: String?
-            var outPath: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--csr" || subArgs[idx] == "-c") && idx + 1 < subArgs.count { csrPath = subArgs[idx + 1]; idx += 1 }
-                if (subArgs[idx] == "--output" || subArgs[idx] == "-o") && idx + 1 < subArgs.count { outPath = subArgs[idx + 1]; idx += 1 }
-                idx += 1
-            }
-            subAction = .create(csrPath: csrPath, outPath: outPath)
-        } else if subArgs.contains("revoke") || subArgs.contains("rm") || subArgs.contains("delete") {
-            var certID: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--id" || subArgs[idx] == "-i") && idx + 1 < subArgs.count { certID = subArgs[idx + 1]; idx += 1 }
-                idx += 1
-            }
-            guard let cID = certID else {
-                CommandHandler.printError("Usage: sidesign dev certs revoke --id <cert_serial_or_id>")
-                terminate(code: 1)
-            }
-            subAction = .revoke(certID: cID)
-        } else {
-            subAction = .list
-        }
-        return .certs(PortalCertOptions(action: subAction, portalOptions: portalOpts))
-    }
-
-    if action == "appids" {
-        let subAction: PortalAppIDOptions.Action
-        if subArgs.contains("register") || subArgs.contains("create") || subArgs.contains("add") {
-            var name: String?
-            var bundleID: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--name" || subArgs[idx] == "-n") && idx + 1 < subArgs.count { name = subArgs[idx + 1]; idx += 1 }
-                if (subArgs[idx] == "--bundle-id" || subArgs[idx] == "-b" || subArgs[idx] == "-i") && idx + 1 < subArgs.count { bundleID = subArgs[idx + 1]; idx += 1 }
-                idx += 1
-            }
-            guard let name = name, let bundleID = bundleID else {
-                CommandHandler.printError("Usage: sidesign dev appids register --name <name> --bundle-id <bundle_id>")
-                terminate(code: 1)
-            }
-            subAction = .register(name: name, bundleID: bundleID)
-        } else if subArgs.contains("delete") || subArgs.contains("rm") || subArgs.contains("remove") {
-            var targetID: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--id" || subArgs[idx] == "-i") && idx + 1 < subArgs.count { targetID = subArgs[idx + 1]; idx += 1 }
-                idx += 1
-            }
-            guard let targetID = targetID else {
-                CommandHandler.printError("Usage: sidesign dev appids delete --id <app_id>")
-                terminate(code: 1)
-            }
-            subAction = .delete(targetID: targetID)
-        } else {
-            subAction = .list
-        }
-        return .appIDs(PortalAppIDOptions(action: subAction, portalOptions: portalOpts))
-    }
-
-    if action == "appgroups" {
-        let subAction: PortalAppGroupOptions.Action
-        if subArgs.contains("create") || subArgs.contains("add") {
-            var name: String?
-            var groupID: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--name" || subArgs[idx] == "-n") && idx + 1 < subArgs.count { name = subArgs[idx + 1]; idx += 1 }
-                if (subArgs[idx] == "--group-id" || subArgs[idx] == "-g" || subArgs[idx] == "-id") && idx + 1 < subArgs.count { groupID = subArgs[idx + 1]; idx += 1 }
-                idx += 1
-            }
-            guard let name = name, let groupID = groupID else {
-                CommandHandler.printError("Usage: sidesign dev appgroups create --name <name> --group-id <group_id>")
-                terminate(code: 1)
-            }
-            subAction = .create(name: name, groupID: groupID)
-        } else if subArgs.contains("assign") {
-            var appIDStr: String?
-            var groupIDStr: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--app-id" || subArgs[idx] == "-a" || subArgs[idx] == "-aid") && idx + 1 < subArgs.count { appIDStr = subArgs[idx + 1]; idx += 1 }
-                if (subArgs[idx] == "--group-id" || subArgs[idx] == "-g" || subArgs[idx] == "-gid") && idx + 1 < subArgs.count { groupIDStr = subArgs[idx + 1]; idx += 1 }
-                idx += 1
-            }
-            guard let appIDStr = appIDStr, let groupIDStr = groupIDStr else {
-                CommandHandler.printError("Usage: sidesign dev appgroups assign --app-id <app_id> --group-id <group_id>")
-                terminate(code: 1)
-            }
-            subAction = .assign(appID: appIDStr, groupID: groupIDStr)
-        } else if subArgs.contains("update") || subArgs.contains("rename") {
-            var name: String?
-            var groupIDStr: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--name" || subArgs[idx] == "-n") && idx + 1 < subArgs.count { name = subArgs[idx + 1]; idx += 1 }
-                if (subArgs[idx] == "--id" || subArgs[idx] == "--group-id" || subArgs[idx] == "-g" || subArgs[idx] == "-id") && idx + 1 < subArgs.count { groupIDStr = subArgs[idx + 1]; idx += 1 }
-                idx += 1
-            }
-            guard let name = name, let groupIDStr = groupIDStr else {
-                CommandHandler.printError("Usage: sidesign dev appgroups update --id <group_id> --name <new_name>")
-                terminate(code: 1)
-            }
-            subAction = .update(name: name, groupID: groupIDStr)
-        } else if subArgs.contains("delete") || subArgs.contains("remove") || subArgs.contains("rm") {
-            var groupIDStr: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--id" || subArgs[idx] == "--group-id" || subArgs[idx] == "-g" || subArgs[idx] == "-id") && idx + 1 < subArgs.count {
-                    groupIDStr = subArgs[idx + 1]
-                    idx += 1
-                }
-                idx += 1
-            }
-            guard let groupIDStr = groupIDStr else {
-                CommandHandler.printError("Usage: sidesign dev appgroups delete --id <group_id>")
-                terminate(code: 1)
-            }
-            subAction = .delete(groupID: groupIDStr)
-        } else {
-            subAction = .list
-        }
-        return .appGroups(PortalAppGroupOptions(action: subAction, portalOptions: portalOpts))
-    }
-
-    if action == "profiles" {
-        let subAction: PortalProfileOptions.Action
-        if subArgs.contains("download") || subArgs.contains("fetch") {
-            var bundleIDStr: String?
-            var outputPath: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--bundle-id" || subArgs[idx] == "-b" || subArgs[idx] == "-i") && idx + 1 < subArgs.count { bundleIDStr = subArgs[idx + 1]; idx += 1 }
-                if (subArgs[idx] == "--output" || subArgs[idx] == "-o") && idx + 1 < subArgs.count { outputPath = subArgs[idx + 1]; idx += 1 }
-                idx += 1
-            }
-            guard let bundleID = bundleIDStr else {
-                CommandHandler.printError("Usage: sidesign dev profiles download --bundle-id <bundle_id> [--output <path>]")
-                terminate(code: 1)
-            }
-            subAction = .download(bundleID: bundleID, outputPath: outputPath)
-        } else if subArgs.contains("delete") || subArgs.contains("rm") || subArgs.contains("remove") {
-            var profileID: String?
-            var idx = 0
-            while idx < subArgs.count {
-                if (subArgs[idx] == "--id" || subArgs[idx] == "-i") && idx + 1 < subArgs.count { profileID = subArgs[idx + 1]; idx += 1 }
-                idx += 1
-            }
-            guard let profID = profileID else {
-                CommandHandler.printError("Usage: sidesign dev profiles delete --id <profile_id_or_uuid>")
-                terminate(code: 1)
-            }
-            subAction = .delete(profileID: profID)
-        } else {
-            subAction = .list
-        }
-        return .profiles(PortalProfileOptions(action: subAction, portalOptions: portalOpts))
-    }
-
-    CommandHandler.printError("Unknown dev subcommand: \(action)")
-    exit(1)
-}
-
-let rawArgs = Array(CommandLine.arguments.dropFirst())
-
-if rawArgs.isEmpty || rawArgs.contains("-h") || rawArgs.contains("--help") || rawArgs.contains("help") {
-    printUsage()
-    exit(0)
-}
-
-if rawArgs.contains("--verbose") || rawArgs.contains("-v") || rawArgs.contains("-vv") || rawArgs.contains("--debug") || rawArgs.contains("-d") {
-    SideSignLogging.setLogging(true)
-}
-
-print()
-defer { print() }
-
-let nonGlobalArgs = rawArgs.filter { !["-v", "--verbose", "-vv", "--debug", "-d"].contains($0) }
-guard let command = nonGlobalArgs.first else {
-    printUsage()
-    exit(0)
-}
-let subArgs = Array(nonGlobalArgs.dropFirst())
-
-do {
+    let cmd = FlagRegistry.commands
     switch command {
-    case "sign", "-s", "--sign":
-        let ctx = parseSignContext(args: subArgs)
+    case cmd["sign"]:
+        let ctx = try parseSignContext(args: subArgs)
         try await CommandHandler.handleSign(context: ctx)
-    case "verify":
-        let ctx = parseVerifyContext(args: subArgs)
+    case cmd["verify"]:
+        let ctx = try parseVerifyContext(args: subArgs)
         try CommandHandler.handleVerify(context: ctx)
-    case "display", "inspect", "-d", "--display":
-        let ctx = parseInspectContext(args: subArgs)
+    case cmd["display"]:
+        let ctx = try parseInspectContext(args: subArgs)
         try CommandHandler.handleDisplay(context: ctx)
-    case "profile":
-        let ctx = parseProfileContext(args: subArgs)
+    case cmd["profile"]:
+        let ctx = try parseProfileContext(args: subArgs)
         try CommandHandler.handleProfile(context: ctx)
-    case "extensions":
-        let ctx = parseExtensionsContext(args: subArgs)
+    case cmd["extensions"]:
+        let ctx = try parseExtensionsContext(args: subArgs)
         try CommandHandler.handleExtensions(context: ctx)
-    case "archive":
-        let ctx = parseArchiveContext(args: subArgs)
+    case cmd["archive"]:
+        let ctx = try parseArchiveContext(args: subArgs)
         try CommandHandler.handleArchive(context: ctx)
-    case "dev", "developer", "portal", "auth":
-        let req = parsePortalRequestContext(args: subArgs)
+    case cmd["dev"]:
+        let req = try PortalCommandsParser.parse(args: subArgs)
         try await CommandHandler.handlePortal(request: req)
-    case "p12":
-        let ctx = parseP12Context(args: subArgs)
+    case cmd["p12"]:
+        let ctx = try parseP12Context(args: subArgs)
         try CommandHandler.handleP12(context: ctx)
-    case "csr":
-        let ctx = parseCSRContext(args: subArgs)
+    case cmd["csr"]:
+        let ctx = try parseCSRContext(args: subArgs)
         try CommandHandler.handleCSR(context: ctx)
-    case "anisette":
-        let ctx = parseAnisetteContext(args: subArgs)
+    case cmd["anisette"]:
+        let ctx = try parseAnisetteContext(args: subArgs)
         try await CommandHandler.handleAnisette(context: ctx)
-    case "remove-signature", "--remove-signature":
+    case cmd["removeSignature"]:
         let ctx = RemoveSignatureContext(targetPath: subArgs.first ?? "")
         guard !ctx.targetPath.isEmpty else {
-            CommandHandler.printError("Usage: sidesign remove-signature <path_to_binary_or_bundle>")
-            terminate(code: 1)
+            throw CLIError.missingRequiredArgument("Usage: sidesign remove-signature <path_to_binary_or_bundle>")
         }
         try CommandHandler.handleRemoveSignature(context: ctx)
     default:
         if FileManager.default.fileExists(atPath: command) {
-            let ctx = parseSignContext(args: [command] + subArgs)
+            let ctx = try parseSignContext(args: [command] + subArgs)
             try await CommandHandler.handleSign(context: ctx)
         } else {
-            CommandHandler.printError("Unknown command '\(command)'.")
             printUsage()
-            terminate(code: 1)
+            throw CLIError.invalidArgument("Unknown command '\(command)'.")
         }
     }
-} catch {
-    CommandHandler.printError(error.localizedDescription)
-    exit(1)
 }
+
+func main() async {
+    do {
+        try await run(rawArgs: Array(CommandLine.arguments.dropFirst()))
+    } catch {
+        CommandHandler.printError(error.localizedDescription)
+        exit(1)
+    }
+}
+
+await main()
