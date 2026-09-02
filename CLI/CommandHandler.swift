@@ -1044,7 +1044,7 @@ public enum CommandHandler {
         sessionURL: URL,
         options: PortalOptions
     ) async throws {
-        let (anisetteData, freshBlob, targetDataURL, devPass) = try await fetchAnisetteHeaders(options: options)
+        let (anisetteData, _, _, _) = try await fetchAnisetteHeaders(options: options)
 
         let pwd: String
         if let p = password, !p.isEmpty {
