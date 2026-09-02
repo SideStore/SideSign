@@ -39,3 +39,5 @@ xcuserdata
 .idea/
 sidesign
 build.log
+
+*.sh
