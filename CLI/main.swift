@@ -30,12 +30,7 @@ func readInteractiveLine(prompt: String, emptyLineBefore: Bool = true, emptyLine
 }
 
 func readSecurePassword(prompt: String, emptyLineBefore: Bool = true, emptyLineAfter: Bool = true) -> String? {
-    if emptyLineBefore { print() }
-    print(prompt, terminator: "")
-    fflush(nil)
-    let input = readLine(strippingNewline: true)
-    if emptyLineAfter { print() }
-    return input
+    return SecureInput.readPassword(prompt: prompt, emptyLineBefore: emptyLineBefore, emptyLineAfter: emptyLineAfter)
 }
 
 func printUsage() {
