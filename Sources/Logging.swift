@@ -18,12 +18,7 @@ public enum SideSignLogging {
     }
 }
 
-private struct LogFormatConfig: Sendable {
-    var dateFormat: String = "%Y-%m-%dT%H:%M:%S"
-    var locale: String = "en_US_POSIX"
-}
-
-private func getFormattedTimestamp(config: LogFormatConfig = LogFormatConfig()) -> String {
+private func getFastTimestamp() -> String {
     var tv = timeval()
     gettimeofday(&tv, nil)
     var tm_info = tm()
@@ -31,7 +26,7 @@ private func getFormattedTimestamp(config: LogFormatConfig = LogFormatConfig()) 
     let ms = Int32(tv.tv_usec / 1000)
 
     var timeBuf = [CChar](repeating: 0, count: 64)
-    let len = strftime(&timeBuf, timeBuf.count - 5, config.dateFormat, &tm_info)
+    let len = strftime(&timeBuf, timeBuf.count - 5, "%Y-%m-%dT%H:%M:%S", &tm_info)
     if len > 0 {
         timeBuf[len] = 46 // '.'
         timeBuf[len + 1] = CChar(48 + (ms / 100))
@@ -43,8 +38,8 @@ private func getFormattedTimestamp(config: LogFormatConfig = LogFormatConfig()) 
     return ""
 }
 
-private func getTag(level: String, config: LogFormatConfig = LogFormatConfig()) -> String {
-    let timestamp = getFormattedTimestamp(config: config)
+private func getTag(level: String) -> String {
+    let timestamp = getFastTimestamp()
     return "\(timestamp) \(level): "
 }
 
