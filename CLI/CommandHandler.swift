@@ -630,7 +630,7 @@ public enum CommandHandler {
 
             if let freshBlob = newAdiPb {
                 if deviceDataPassword == nil {
-                    if let entered = readSecurePassword(prompt: "Enter password to encrypt new device data (\(targetDataURL.lastPathComponent)): "), !entered.isEmpty else {
+                    if let entered = readSecurePassword(prompt: "Enter password to encrypt new device data (\(targetDataURL.lastPathComponent)): "), !entered.isEmpty {
                         deviceDataPassword = entered
                     }
                 }
@@ -821,8 +821,8 @@ public enum CommandHandler {
             switch options.action {
             case .register(let name, let udid):
                 print("Registering device '\(name)' (\(udid))...")
-                let newDevice = try await portal.registerDevice(name: name, udid: udid, team: team, session: session)
-                print("Successfully registered device: \(newDevice.name) (ID: \(newDevice.identifier), UDID: \(newDevice.udid))")
+                let newDevice = try await portal.registerDevice(name: name, identifier: udid, type: .all, team: team, session: session)
+                print("Successfully registered device: \(newDevice.name) (UDID: \(newDevice.identifier))")
 
             case .update(let name, let udid):
                 let devices = try await portal.fetchDevices(for: team, session: session)
@@ -839,26 +839,26 @@ public enum CommandHandler {
                 guard let targetDevice = devices.first(where: { $0.identifier == udid || $0.deviceID == udid }) else {
                     throw CLIError.executionFailed("Device '\(udid)' not found.")
                 }
-                print("Disabling device '\(targetDevice.name)' (\(targetDevice.identifier))...")
+                print("Disabling device '\(targetDevice.name)' (\(udid))...")
                 let disabled = try await portal.disableDevice(targetDevice, team: team, session: session)
-                print("Successfully disabled device: \(disabled.name)")
+                print("Device disabled: \(disabled.name) (\(disabled.identifier))")
 
             case .delete(let udid):
                 let devices = try await portal.fetchDevices(for: team, session: session)
                 guard let targetDevice = devices.first(where: { $0.identifier == udid || $0.deviceID == udid }) else {
                     throw CLIError.executionFailed("Device '\(udid)' not found.")
                 }
-                print("Deleting device '\(targetDevice.name)' (\(targetDevice.identifier))...")
+                print("Deleting device '\(targetDevice.name)' (\(udid))...")
                 _ = try await portal.deleteDevice(targetDevice, team: team, session: session)
-                print("Successfully deleted device.")
+                print("Device deleted successfully.")
 
             case .list:
                 let devices = try await portal.fetchDevices(for: team, session: session)
                 if !SideSignLogging.isLoggingEnabled {
-                    print("\nRegistered Devices for team '\(team.name)':")
+                    print("Devices for Team \(team.name) (\(devices.count)):")
                     for d in devices {
-                        let statusStr = d.status == "d" ? " [DISABLED]" : ""
-                        print("  * \(d.name) [\(d.identifier)] (\(d.type.displayName))\(statusStr)")
+                        let devIDStr = d.deviceID != nil ? " [DeviceID: \(d.deviceID!)]" : ""
+                        print("  - \(d.name) (UDID: \(d.identifier))\(devIDStr)")
                     }
                 }
             }
@@ -874,24 +874,17 @@ public enum CommandHandler {
             }
 
             switch options.action {
-            case .create(let csrPath, let outPath):
-                if let csrFile = csrPath {
-                    let csrData = try Data(contentsOf: URL(fileURLWithPath: csrFile))
-                    guard let csrString = String(data: csrData, encoding: .utf8) else {
-                        throw CLIError.executionFailed("Could not read CSR string from \(csrFile)")
+            case .create(_, let outPath):
+                print("Creating new Development Certificate from Apple...")
+                let keyStore = try await portal.addCertificate(machineName: "Mac", to: team, session: session)
+                if let out = outPath {
+                    let outURL = URL(fileURLWithPath: out)
+                    guard let certData = keyStore.certificate.data else {
+                        throw CLIError.executionFailed("Certificate raw data is unavailable.")
                     }
-                    print("Requesting Development Certificate from Apple...")
-                    let cert = try await portal.createCertificate(csr: csrString, type: .development, team: team, session: session)
-                    if let out = outPath {
-                        let outURL = URL(fileURLWithPath: out)
-                        try cert.data.write(to: outURL)
-                        print("Certificate saved to: \(outURL.path)")
-                    } else {
-                        print("Successfully created certificate: \(cert.name) (Serial: \(cert.serialNumber))")
-                    }
+                    try certData.write(to: outURL)
+                    print("Certificate saved to: \(outURL.path)")
                 } else {
-                    print("Creating new Development Certificate...")
-                    let keyStore = try await portal.addCertificate(machineName: "Mac", to: team, session: session)
                     print("Successfully created certificate: \(keyStore.certificate.name) (Serial: \(keyStore.certificate.serialNumber))")
                 }
 
@@ -1069,34 +1062,22 @@ public enum CommandHandler {
             appleID: appleID,
             password: pwd,
             anisetteData: anisetteData,
-            xcodeVersion: "15.0"
-        ) { mode, completion in
-            handleCLI2FA(mode: mode, completion: completion)
-        }
+            xcodeVersion: "26.0",
+            verificationHandler: handleCLI2FA
+        )
 
-        var discoveredTeamID: String? = options.teamID
-        if discoveredTeamID == nil {
-            let teams = try await portal.fetchTeams(for: authSession.account, session: authSession.session)
-            discoveredTeamID = teams.first?.identifier
-        }
-
-        if let tID = discoveredTeamID {
-            let teamSessionURL = SessionManager.url(for: tID)
-            try SessionManager.save(authSession, to: teamSessionURL, password: options.encryptPassword)
-            try SessionManager.save(authSession, to: SessionManager.defaultSessionURL, password: options.encryptPassword)
-
-            if let freshBlob = freshBlob, let devPass = devPass {
-                let teamMachineData = DeviceData(
-                    identifier: UUID(),
-                    adiBlob: freshBlob,
-                    machineID: anisetteData.machineID,
-                    localUserID: anisetteData.localUserID
-                )
-                try DeviceDataManager.save(teamMachineData, to: DeviceDataManager.url(for: tID), password: devPass)
-                try DeviceDataManager.save(teamMachineData, to: DeviceDataManager.defaultURL, password: devPass)
+        var discoveredTeamID: String?
+        if options.teamID == nil {
+            if let teams = try? await portal.fetchTeams(for: authSession.account, session: authSession.session),
+               let firstTeam = teams.first {
+                discoveredTeamID = firstTeam.identifier
+                let teamURL = SessionManager.url(for: firstTeam.identifier)
+                try SessionManager.save(authSession, to: teamURL, password: options.encryptPassword)
+                print("Default team '\(firstTeam.name)' (\(firstTeam.identifier)) associated with session: \(teamURL.path)")
             }
-            print("Authentication successful! Session saved for Team: \(tID)")
-        } else {
+        }
+
+        if discoveredTeamID == nil {
             try SessionManager.save(authSession, to: sessionURL, password: options.encryptPassword)
             print("Authentication successful! Session saved to: \(sessionURL.path)")
         }
@@ -1107,7 +1088,7 @@ public enum CommandHandler {
 
     private static func executePortalOperation(
         options: PortalOptions,
-        operation: (DeveloperPortal, Account, DeveloperPortalSession) async throws -> Void
+        operation: (DeveloperPortal, Account, Session) async throws -> Void
     ) async throws {
         let target = options.sessionPath.map { URL(fileURLWithPath: $0) } ?? SessionManager.url(for: options.teamID)
         guard SessionManager.hasSession(at: target) else {
@@ -1263,7 +1244,7 @@ public enum CommandHandler {
 
         if let freshBlob = newAdiPb {
             if devPass == nil {
-                if let entered = readSecurePassword(prompt: "Enter password to encrypt new device data (\(targetDataURL.lastPathComponent)): "), !entered.isEmpty else {
+                if let entered = readSecurePassword(prompt: "Enter password to encrypt new device data (\(targetDataURL.lastPathComponent)): "), !entered.isEmpty {
                     devPass = entered
                 }
             }
