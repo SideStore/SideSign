@@ -21,51 +21,44 @@ func printWarning(_ message: String) {
 }
 
 func isInteractiveTerminal() -> Bool {
-    return isatty(FileHandle.standardInput.fileDescriptor) != 0
+    #if canImport(Darwin) || os(Linux) || os(Android)
+    return isatty(0) != 0
+    #else
+    return true
+    #endif
 }
 
 func clearStdinBuffer() {
     #if canImport(Darwin) || os(Linux) || os(Android)
-    if isInteractiveTerminal() {
-        tcflush(FileHandle.standardInput.fileDescriptor, TCIFLUSH)
+    if isatty(0) != 0 {
+        tcflush(0, TCIFLUSH)
     }
     #endif
 }
 
 func readInteractiveLine(prompt: String, emptyLineBefore: Bool = true, emptyLineAfter: Bool = true) -> String? {
-    if isInteractiveTerminal() {
-        if emptyLineBefore { print() }
-        print(prompt, terminator: "")
-        fflush(nil)
-        let line = readLine(strippingNewline: true)
-        if emptyLineAfter { print() }
-        return line
-    } else {
-        return readLine(strippingNewline: true)
-    }
+    if emptyLineBefore { print() }
+    print(prompt, terminator: "")
+    fflush(nil)
+    let line = readLine(strippingNewline: true)
+    if emptyLineAfter { print() }
+    return line
 }
 
 func readSecurePassword(prompt: String, emptyLineBefore: Bool = true, emptyLineAfter: Bool = true) -> String? {
-    if isInteractiveTerminal() {
-        if emptyLineBefore { print() }
-        #if canImport(Darwin) || os(Linux) || os(Android)
-        if let passCStr = getpass(prompt) {
-            let passStr = String(cString: passCStr)
-            if emptyLineAfter { print() }
-            return passStr
-        }
+    if emptyLineBefore { print() }
+    #if canImport(Darwin) || os(Linux) || os(Android)
+    if isatty(0) != 0, let passCStr = getpass(prompt) {
+        let passStr = String(cString: passCStr)
         if emptyLineAfter { print() }
-        return nil
-        #else
-        print(prompt, terminator: "")
-        fflush(nil)
-        let input = readLine(strippingNewline: true)
-        if emptyLineAfter { print() }
-        return input
-        #endif
-    } else {
-        return readLine(strippingNewline: true)
+        return passStr
     }
+    #endif
+    print(prompt, terminator: "")
+    fflush(nil)
+    let input = readLine(strippingNewline: true)
+    if emptyLineAfter { print() }
+    return input
 }
 
 func printUsage() {
