@@ -19,23 +19,14 @@ public enum SideSignLogging {
 }
 
 private func getFastTimestamp() -> String {
-    var tv = timeval()
-    gettimeofday(&tv, nil)
-    var tm_info = tm()
-    localtime_r(&tv.tv_sec, &tm_info)
-    let ms = Int32(tv.tv_usec / 1000)
-
-    var timeBuf = [CChar](repeating: 0, count: 64)
-    let len = strftime(&timeBuf, timeBuf.count - 5, "%Y-%m-%dT%H:%M:%S", &tm_info)
-    if len > 0 {
-        timeBuf[len] = 46 // '.'
-        timeBuf[len + 1] = CChar(48 + (ms / 100))
-        timeBuf[len + 2] = CChar(48 + ((ms / 10) % 10))
-        timeBuf[len + 3] = CChar(48 + (ms % 10))
-        timeBuf[len + 4] = 0
-        return String(cString: timeBuf)
-    }
-    return ""
+    let now = Date()
+    let cal = Calendar.current
+    let comps = cal.dateComponents([.year, .month, .day, .hour, .minute, .second, .nanosecond], from: now)
+    let ms = (comps.nanosecond ?? 0) / 1_000_000
+    return String(format: "%04d-%02d-%02dT%02d:%02d:%02d.%03d",
+                  comps.year ?? 0, comps.month ?? 0, comps.day ?? 0,
+                  comps.hour ?? 0, comps.minute ?? 0, comps.second ?? 0,
+                  ms)
 }
 
 private func getTag(level: String) -> String {
