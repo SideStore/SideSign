@@ -94,7 +94,10 @@ public enum Constants {
         public static let pbkdf2Rounds               = 100_000
         public static let keyOutputLength            = 32
         public static let defaultDirName             = "sidesign"
+        public static let defaultConfigDir           = ".config"
         public static let defaultFileName            = "session.dat"
+        public static let filePrefix                 = "session_"
+        public static let fileExtension              = ".dat"
         public static let machineSeedInfo            = "SideSign.AES-GCM.SessionStorageKey"
         public static let machineSeedDomain          = "SideSign.Session.MachineSeed.v1"
         public static let fallbackSeed               = "SideSignFallbackSeed"
@@ -107,7 +110,9 @@ public enum Constants {
 
     public enum DeviceData {
         public static let magic: [UInt8]             = [0x41, 0x44, 0x49, 0x31] // "ADI1"
-        public static let defaultFileName            = "devicedata.dat"
+        public static let defaultFileName            = "machine.dat"
+        public static let filePrefix                 = "machine_"
+        public static let fileExtension              = ".dat"
     }
 
     public enum Anisette {

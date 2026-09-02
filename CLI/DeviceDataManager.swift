@@ -44,6 +44,13 @@ public struct DeviceDataManager: Sendable {
         return defaultDirectory.appendingPathComponent(Constants.DeviceData.defaultFileName)
     }
 
+    public static func url(for identifier: String? = nil) -> URL {
+        if let id = identifier, !id.isEmpty {
+            return defaultDirectory.appendingPathComponent("\(Constants.DeviceData.filePrefix)\(id)\(Constants.DeviceData.fileExtension)")
+        }
+        return defaultURL
+    }
+
     public static func hasData(at url: URL? = nil) -> Bool {
         let targetURL = url ?? defaultURL
         return FileManager.default.fileExists(atPath: targetURL.path)

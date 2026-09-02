@@ -54,7 +54,7 @@ public struct SessionManager: Sendable {
         }
 
         return URL(fileURLWithPath: homeDir)
-            .appendingPathComponent(".config")
+            .appendingPathComponent(Constants.Session.defaultConfigDir)
             .appendingPathComponent(Constants.Session.defaultDirName)
     }
 
@@ -62,9 +62,56 @@ public struct SessionManager: Sendable {
         return defaultSessionDirectory.appendingPathComponent(Constants.Session.defaultFileName)
     }
 
+    public static func url(for identifier: String? = nil) -> URL {
+        if let id = identifier, !id.isEmpty {
+            return defaultSessionDirectory.appendingPathComponent("\(Constants.Session.filePrefix)\(id)\(Constants.Session.fileExtension)")
+        }
+        return defaultSessionURL
+    }
+
     public static func hasSession(at url: URL? = nil) -> Bool {
         let targetURL = url ?? defaultSessionURL
         return FileManager.default.fileExists(atPath: targetURL.path)
+    }
+
+    public static func listSessions() -> [(teamID: String?, url: URL)] {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: defaultSessionDirectory, includingPropertiesForKeys: nil) else {
+            return []
+        }
+        var results: [(teamID: String?, url: URL)] = []
+        for file in files {
+            let name = file.lastPathComponent
+            if name == Constants.Session.defaultFileName {
+                results.append((teamID: nil, url: file))
+            } else if name.hasPrefix(Constants.Session.filePrefix) && name.hasSuffix(Constants.Session.fileExtension) {
+                let id = String(name.dropFirst(Constants.Session.filePrefix.count).dropLast(Constants.Session.fileExtension.count))
+                results.append((teamID: id, url: file))
+            }
+        }
+        return results.sorted { ($0.teamID ?? "") < ($1.teamID ?? "") }
+    }
+
+    public static func setActiveSession(forTeamID teamID: String) throws {
+        let teamSessionURL = url(for: teamID)
+        guard FileManager.default.fileExists(atPath: teamSessionURL.path) else {
+            throw SessionStorageError.fileNotFound(teamSessionURL)
+        }
+        let data = try Data(contentsOf: teamSessionURL)
+        try data.write(to: defaultSessionURL, options: .atomic)
+
+        let teamMachineURL = DeviceDataManager.url(for: teamID)
+        if FileManager.default.fileExists(atPath: teamMachineURL.path) {
+            let mData = try Data(contentsOf: teamMachineURL)
+            try mData.write(to: DeviceDataManager.defaultURL, options: .atomic)
+        }
+    }
+
+    public static func setActiveSession(at sourceURL: URL) throws {
+        guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+            throw SessionStorageError.fileNotFound(sourceURL)
+        }
+        let data = try Data(contentsOf: sourceURL)
+        try data.write(to: defaultSessionURL, options: .atomic)
     }
 
     public static func save(
