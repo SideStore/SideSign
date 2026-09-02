@@ -65,7 +65,7 @@ public struct DeviceDataManager: Sendable {
         encoder.outputFormat = .binary
         let plaintextData = try encoder.encode(deviceData)
 
-        let saltData = SymmetricKey(size: .init(byteCount: Constants.Session.saltLength)).withUnsafeBytes { Data($0) }
+        let saltData = Data((0..<Constants.Session.saltLength).map { _ in UInt8.random(in: 0...255) })
 
         let symmetricKey = try deriveKey(from: password, salt: saltData)
         let sealedBox = try AES.GCM.seal(plaintextData, using: symmetricKey)

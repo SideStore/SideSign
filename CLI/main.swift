@@ -24,6 +24,14 @@ func isInteractiveTerminal() -> Bool {
     return isatty(FileHandle.standardInput.fileDescriptor) != 0
 }
 
+func clearStdinBuffer() {
+    #if canImport(Darwin) || os(Linux) || os(Android)
+    if isInteractiveTerminal() {
+        tcflush(FileHandle.standardInput.fileDescriptor, TCIFLUSH)
+    }
+    #endif
+}
+
 func readInteractiveLine(prompt: String, emptyLineBefore: Bool = true, emptyLineAfter: Bool = true) -> String? {
     if isInteractiveTerminal() {
         if emptyLineBefore { print() }
@@ -40,7 +48,7 @@ func readInteractiveLine(prompt: String, emptyLineBefore: Bool = true, emptyLine
 func readSecurePassword(prompt: String, emptyLineBefore: Bool = true, emptyLineAfter: Bool = true) -> String? {
     if isInteractiveTerminal() {
         if emptyLineBefore { print() }
-        #if canImport(Darwin) || os(Linux)
+        #if canImport(Darwin) || os(Linux) || os(Android)
         if let passCStr = getpass(prompt) {
             let passStr = String(cString: passCStr)
             if emptyLineAfter { print() }
