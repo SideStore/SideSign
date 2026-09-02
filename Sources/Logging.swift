@@ -18,16 +18,31 @@ public enum SideSignLogging {
     }
 }
 
-@inline(__always)
-private func getTag(level: String) -> String {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    let timestamp = formatter.string(from: Date())
+private struct LogFormatConfig: Sendable {
+    var dateFormat: String = "%Y-%m-%dT%H:%M:%S"
+    var locale: String = "en_US_POSIX"
+}
+
+private func getFormattedTimestamp(config: LogFormatConfig = LogFormatConfig()) -> String {
+    var tv = timeval()
+    gettimeofday(&tv, nil)
+    var tm_info = tm()
+    localtime_r(&tv.tv_sec, &tm_info)
+    let ms = Int32(tv.tv_usec / 1000)
+
+    var timeBuf = [CChar](repeating: 0, count: 64)
+    strftime(&timeBuf, timeBuf.count, config.dateFormat, &tm_info)
+
+    var buf = [CChar](repeating: 0, count: 96)
+    snprintf(&buf, buf.count, "%s.%03d", timeBuf, ms)
+    return String(cString: buf)
+}
+
+private func getTag(level: String, config: LogFormatConfig = LogFormatConfig()) -> String {
+    let timestamp = getFormattedTimestamp(config: config)
     return "\(timestamp) \(level): "
 }
 
-@inline(__always)
 public func debugLog(_ text: @autoclosure () -> String) {
     let message = text()
     if !message.isEmpty && message.allSatisfy({ $0 == "\n" || $0 == "\r" }) {
@@ -37,7 +52,6 @@ public func debugLog(_ text: @autoclosure () -> String) {
     }
 }
 
-@inline(__always)
 public func verboseLog(_ text: @autoclosure () -> String) {
     if SideSignLogging.isLoggingEnabled {
         let message = text()
