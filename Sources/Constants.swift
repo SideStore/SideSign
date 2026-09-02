@@ -109,6 +109,12 @@ public enum Constants {
         public static let magic: [UInt8]             = [0x41, 0x44, 0x49, 0x31] // "ADI1"
         public static let defaultFileName            = "devicedata.dat"
     }
+
+    public enum Anisette {
+        public static let defaultUserAgent = "akd/1.0 CFNetwork/1408.0.4 Darwin/22.5.0"
+        public static let defaultMdLu      = ""
+        public static let defaultMdRinfo   = "17106176"
+    }
 }
 
 public enum GrandSlamAuthErrorCodes {

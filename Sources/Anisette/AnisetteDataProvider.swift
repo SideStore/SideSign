@@ -691,7 +691,7 @@ public actor AnisetteDataProvider {
             throw AnisetteError.invalidURL
         }
 
-        verboseLog("[Anisette WS] Fetching client info from \(clientInfoURL.absoluteString)...")
+        verboseLog("[Anisette-WebSocket] Fetching client info from \(clientInfoURL.absoluteString)...")
         var clientInfoReq = URLRequest(url: clientInfoURL)
         clientInfoReq.cachePolicy = .reloadIgnoringLocalCacheData
         clientInfoReq.timeoutInterval = 10
@@ -702,9 +702,9 @@ public actor AnisetteDataProvider {
         }
 
         let resolvedClientInfo = clientInfoJSON["client_info"] as? String ?? clientInfo
-        let userAgent = clientInfoJSON["user_agent"] as? String ?? "akd/1.0 CFNetwork/1408.0.4 Darwin/22.5.0"
-        let mdLu = clientInfoJSON["md_lu"] as? String ?? ""
-        let mdRinfo = clientInfoJSON["md_rinfo"] as? String ?? "17106176"
+        let userAgent = clientInfoJSON["user_agent"] as? String ?? Constants.Anisette.defaultUserAgent
+        let mdLu = clientInfoJSON["md_lu"] as? String ?? Constants.Anisette.defaultMdLu
+        let mdRinfo = clientInfoJSON["md_rinfo"] as? String ?? Constants.Anisette.defaultMdRinfo
 
         var req = URLRequest(url: Constants.URLs.grandSlamLookup)
         req.httpMethod = "GET"
@@ -717,7 +717,7 @@ public actor AnisetteDataProvider {
         }
         req.setValue(mdRinfo, forHTTPHeaderField: "X-Apple-I-MD-RINFO")
 
-        verboseLog("[Anisette WS] Fetching Apple provisioning URLs from GSA...")
+        verboseLog("[Anisette-WebSocket] Fetching Apple provisioning URLs from GSA...")
         let (lookupData, lookupResp) = try await URLSession.shared.data(for: req)
         guard let gsaResp = lookupResp as? HTTPURLResponse, (200...299).contains(gsaResp.statusCode),
               let plist = try PropertyListSerialization.propertyList(from: lookupData, options: [], format: nil) as? [String: Any],
@@ -732,91 +732,54 @@ public actor AnisetteDataProvider {
         }
 
         guard let httpURL = URL(string: "\(baseURL)/\(Constants.URLs.v3ProvisioningSession)"),
-              var wsComponents = URLComponents(url: httpURL, resolvingAgainstBaseURL: true) else {
+              var webSocketComponents = URLComponents(url: httpURL, resolvingAgainstBaseURL: true) else {
             throw AnisetteError.invalidURL
         }
-        wsComponents.scheme = (wsComponents.scheme == "http") ? "ws" : "wss"
-        guard let wsURL = wsComponents.url else {
+        webSocketComponents.scheme = (webSocketComponents.scheme == "http") ? "ws" : "wss"
+        guard let webSocketURL = webSocketComponents.url else {
             throw AnisetteError.invalidURL
         }
 
-        verboseLog("[Anisette WS] Connecting to WebSocket: \(wsURL.absoluteString)...")
-        let wsTask = URLSession.shared.webSocketTask(with: wsURL)
-        wsTask.resume()
+        verboseLog("[Anisette-WebSocket] Connecting to WebSocket: \(webSocketURL.absoluteString)...")
+        let webSocketTask = URLSession.shared.webSocketTask(with: webSocketURL)
+        webSocketTask.resume()
         defer {
-            wsTask.cancel(with: .normalClosure, reason: nil)
-        }
-
-        func sendWSJSON(_ dict: [String: String]) async throws {
-            let data = try JSONSerialization.data(withJSONObject: dict)
-            let str = String(data: data, encoding: .utf8) ?? ""
-            try await wsTask.send(.string(str))
-        }
-
-        func receiveWSJSON() async throws -> [String: Any] {
-            let msg = try await wsTask.receive()
-            let str: String
-            switch msg {
-            case .string(let s):
-                str = s
-            case .data(let d):
-                str = String(data: d, encoding: .utf8) ?? ""
-            @unknown default:
-                str = ""
-            }
-            guard let jsonData = str.data(using: .utf8),
-                  let json = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-                throw AnisetteError.invalidAnisetteData
-            }
-            return json
+            webSocketTask.cancel(with: .normalClosure, reason: nil)
         }
 
         let cleanIdentifier = identifier.uuidString.replacingOccurrences(of: "-", with: "")
 
-        func postApple(url: URL, body: [String: Any]) async throws -> [String: Any] {
-            var appleReq = URLRequest(url: url)
-            appleReq.httpMethod = "POST"
-            appleReq.setValue("text/x-xml-plist", forHTTPHeaderField: "Content-Type")
-            appleReq.setValue(resolvedClientInfo, forHTTPHeaderField: "X-Mme-Client-Info")
-            appleReq.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-            appleReq.setValue(cleanIdentifier.uppercased(), forHTTPHeaderField: "X-Mme-Device-Id")
-            if !mdLu.isEmpty {
-                appleReq.setValue(mdLu, forHTTPHeaderField: "X-Apple-I-MD-LU")
-            }
-            appleReq.setValue(mdRinfo, forHTTPHeaderField: "X-Apple-I-MD-RINFO")
-            appleReq.httpBody = try PropertyListSerialization.data(fromPropertyList: body, format: .xml, options: 0)
-            let (data, appleResp) = try await URLSession.shared.data(for: appleReq)
-            guard let resPlist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] else {
-                let status = (appleResp as? HTTPURLResponse)?.statusCode ?? -1
-                let payload = String(data: data, encoding: .utf8) ?? ""
-                throw AnisetteError.badServerResponse(statusCode: status, payload: "Invalid plist from Apple GSA: \(payload)")
-            }
-            return resPlist
-        }
-
         while true {
-            let json = try await receiveWSJSON()
+            let json = try await receiveWebSocketJSON(from: webSocketTask)
             guard let result = json["result"] as? String else {
                 throw AnisetteError.badServerResponse(statusCode: -1, payload: "Missing result in WebSocket response")
             }
 
-            verboseLog("[Anisette WS] Step: \(result)")
+            verboseLog("[Anisette-WebSocket] Step: \(result)")
 
             switch result {
             case "GiveIdentifier":
-                try await sendWSJSON(["identifier": cleanIdentifier])
+                try await sendWebSocketJSON(["identifier": cleanIdentifier], to: webSocketTask)
 
             case "GiveStartProvisioningData":
                 let body: [String: Any] = [
                     "Header": [String: Any](),
                     "Request": [String: Any]()
                 ]
-                let resPlist = try await postApple(url: startURL, body: body)
+                let resPlist = try await postAppleGSA(
+                    url: startURL,
+                    body: body,
+                    clientInfo: resolvedClientInfo,
+                    userAgent: userAgent,
+                    deviceId: cleanIdentifier.uppercased(),
+                    mdLu: mdLu,
+                    mdRinfo: mdRinfo
+                )
                 guard let responseDict = resPlist["Response"] as? [String: Any],
                       let spim = responseDict["spim"] as? String else {
                     throw AnisetteError.badServerResponse(statusCode: -1, payload: "Missing spim from Apple start provisioning")
                 }
-                try await sendWSJSON(["spim": spim])
+                try await sendWebSocketJSON(["spim": spim], to: webSocketTask)
 
             case "GiveEndProvisioningData":
                 guard let cpim = json["cpim"] as? String else {
@@ -826,20 +789,28 @@ public actor AnisetteDataProvider {
                     "Header": [String: Any](),
                     "Request": ["cpim": cpim]
                 ]
-                let resPlist = try await postApple(url: endURL, body: body)
+                let resPlist = try await postAppleGSA(
+                    url: endURL,
+                    body: body,
+                    clientInfo: resolvedClientInfo,
+                    userAgent: userAgent,
+                    deviceId: cleanIdentifier.uppercased(),
+                    mdLu: mdLu,
+                    mdRinfo: mdRinfo
+                )
                 guard let responseDict = resPlist["Response"] as? [String: Any],
                       let ptm = responseDict["ptm"] as? String,
                       let tk = responseDict["tk"] as? String else {
                     throw AnisetteError.badServerResponse(statusCode: -1, payload: "Missing ptm/tk from Apple end provisioning")
                 }
-                try await sendWSJSON(["ptm": ptm, "tk": tk])
+                try await sendWebSocketJSON(["ptm": ptm, "tk": tk], to: webSocketTask)
 
             case "ProvisioningSuccess":
                 guard let adiPbStr = json["adi_pb"] as? String,
                       let adiPbData = Data(base64Encoded: adiPbStr), !adiPbData.isEmpty else {
                     throw AnisetteError.badServerResponse(statusCode: -1, payload: "Missing/invalid adi_pb in ProvisioningSuccess")
                 }
-                verboseLog("[Anisette WS] ProvisioningSuccess! Received adi.pb (\(adiPbData.count) bytes)")
+                verboseLog("[Anisette-WebSocket] ProvisioningSuccess! Received adi.pb (\(adiPbData.count) bytes)")
                 return adiPbData
 
             default:
@@ -847,6 +818,59 @@ public actor AnisetteDataProvider {
                 throw AnisetteError.badServerResponse(statusCode: -1, payload: "Remote provisioning error: \(msg)")
             }
         }
+    }
+
+    private func sendWebSocketJSON(_ dict: [String: String], to webSocketTask: URLSessionWebSocketTask) async throws {
+        let data = try JSONSerialization.data(withJSONObject: dict)
+        let str = String(data: data, encoding: .utf8) ?? ""
+        try await webSocketTask.send(.string(str))
+    }
+
+    private func receiveWebSocketJSON(from webSocketTask: URLSessionWebSocketTask) async throws -> [String: Any] {
+        let msg = try await webSocketTask.receive()
+        let str: String
+        switch msg {
+        case .string(let s):
+            str = s
+        case .data(let d):
+            str = String(data: d, encoding: .utf8) ?? ""
+        @unknown default:
+            str = ""
+        }
+        guard let jsonData = str.data(using: .utf8),
+              let json = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+            throw AnisetteError.invalidAnisetteData
+        }
+        return json
+    }
+
+    private func postAppleGSA(
+        url: URL,
+        body: [String: Any],
+        clientInfo: String,
+        userAgent: String,
+        deviceId: String,
+        mdLu: String,
+        mdRinfo: String
+    ) async throws -> [String: Any] {
+        var appleReq = URLRequest(url: url)
+        appleReq.httpMethod = "POST"
+        appleReq.setValue("text/x-xml-plist", forHTTPHeaderField: "Content-Type")
+        appleReq.setValue(clientInfo, forHTTPHeaderField: "X-Mme-Client-Info")
+        appleReq.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        appleReq.setValue(deviceId, forHTTPHeaderField: "X-Mme-Device-Id")
+        if !mdLu.isEmpty {
+            appleReq.setValue(mdLu, forHTTPHeaderField: "X-Apple-I-MD-LU")
+        }
+        appleReq.setValue(mdRinfo, forHTTPHeaderField: "X-Apple-I-MD-RINFO")
+        appleReq.httpBody = try PropertyListSerialization.data(fromPropertyList: body, format: .xml, options: 0)
+        let (data, appleResp) = try await URLSession.shared.data(for: appleReq)
+        guard let resPlist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] else {
+            let status = (appleResp as? HTTPURLResponse)?.statusCode ?? -1
+            let payload = String(data: data, encoding: .utf8) ?? ""
+            throw AnisetteError.badServerResponse(statusCode: status, payload: "Invalid plist from Apple GSA: \(payload)")
+        }
+        return resPlist
     }
 
     public func fetchODAInfo(from serverSourceURL: URL, fallbackODAURL: URL? = nil) async throws -> ODAInfo {
