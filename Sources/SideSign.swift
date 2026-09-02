@@ -28,6 +28,35 @@ extension URLSession {
 }
 #endif
 
+extension HTTPURLResponse {
+    public var isSuccess: Bool {
+        #if os(Windows)
+        if (100...599).contains(statusCode) {
+            return (200...299).contains(statusCode)
+        }
+        // Windows swift-corelibs-foundation ABI workaround:
+        // When statusCode returns an out-of-range pointer address due to DLL ivar offset mismatch,
+        // treat the completed transport response as successful.
+        debugLog("[SideSign] [Windows ABI Workaround] HTTPURLResponse.statusCode returned out-of-range value (\(statusCode)). Treating transport completion as success.")
+        return true
+        #else
+        return (200...299).contains(statusCode)
+        #endif
+    }
+
+    public var safeStatusCode: Int {
+        #if os(Windows)
+        if (100...599).contains(statusCode) {
+            return statusCode
+        }
+        debugLog("[SideSign] [Windows ABI Workaround] HTTPURLResponse.statusCode returned out-of-range value (\(statusCode)). Falling back to 200.")
+        return 200
+        #else
+        return statusCode
+        #endif
+    }
+}
+
 internal extension Data {
     func hexEncodedString() -> String {
         map { String(format: "%02hhx", $0) }.joined()

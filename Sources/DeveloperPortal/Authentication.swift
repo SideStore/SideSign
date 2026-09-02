@@ -437,7 +437,7 @@ public extension DeveloperPortal {
 
         let (data, response) = try await session.data(for: request)
         let httpResponse = response as? HTTPURLResponse
-        let statusCode = httpResponse?.statusCode ?? 0
+        let statusCode = httpResponse?.safeStatusCode ?? 0
 
         guard statusCode == HTTPStatusCodes.ok else {
             let rawStr = prettyJSONString(from: data)
@@ -462,7 +462,7 @@ public extension DeveloperPortal {
                 debugLog("[SideSign] Verifying trusted device security code...")
                 let (verifyData, verifyResponse) = try await session.data(for: verifyRequest)
                 let verifyHttpResponse = verifyResponse as? HTTPURLResponse
-                let verifyStatusCode = verifyHttpResponse?.statusCode ?? 0
+                let verifyStatusCode = verifyHttpResponse?.safeStatusCode ?? 0
 
                 let verifyDictionary = parsePlistOrJSON(verifyData)
                 let (xmluiTitle, xmluiMessage) = parseXMLUIAlertMessage(from: verifyData)
@@ -538,7 +538,7 @@ public extension DeveloperPortal {
 
         let (data, response) = try await session.data(for: request)
         let httpResponse = response as? HTTPURLResponse
-        let statusCode = httpResponse?.statusCode ?? 0
+        let statusCode = httpResponse?.safeStatusCode ?? 0
 
         let rawStr = prettyJSONString(from: data)
         verboseLog("[SideSign] sendPhonePut raw response (HTTP \(statusCode)): \(rawStr)")
@@ -639,7 +639,7 @@ public extension DeveloperPortal {
                 debugLog("[SideSign] Verifying secondary security code...")
                 let (verifyData, verifyResponse) = try await session.data(for: verifyRequest)
                 let verifyHttpResponse = verifyResponse as? HTTPURLResponse
-                let verifyStatusCode = verifyHttpResponse?.statusCode ?? 0
+                let verifyStatusCode = verifyHttpResponse?.safeStatusCode ?? 0
 
                 let verifyDict = parsePlistOrJSON(verifyData)
                 let (xmluiTitle, xmluiMessage) = parseXMLUIAlertMessage(from: verifyData)

@@ -302,7 +302,7 @@ public actor AnisetteDataProvider {
         #endif
 
         if let (data, response) = try? await URLSession.shared.data(for: v3Req),
-           let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) {
+           let httpResp = response as? HTTPURLResponse, httpResp.isSuccess {
             if !strict { return true }
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                json["client_info"] != nil || json["user_agent"] != nil {
@@ -318,7 +318,7 @@ public actor AnisetteDataProvider {
         #endif
 
         if let (data, response) = try? await URLSession.shared.data(for: rootReq),
-           let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) {
+           let httpResp = response as? HTTPURLResponse, httpResp.isSuccess {
             if !strict { return true }
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
                (try? parseAnisetteData(from: json)) != nil {
@@ -477,8 +477,8 @@ public actor AnisetteDataProvider {
             request.timeoutInterval = 15
             let (data, response) = try await URLSession.shared.data(for: request)
 
-            guard let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) else {
-                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            guard let httpResp = response as? HTTPURLResponse, httpResp.isSuccess else {
+                let status = (response as? HTTPURLResponse)?.safeStatusCode ?? -1
                 let payload = String(data: data, encoding: .utf8) ?? ""
                 throw AnisetteError.badServerResponse(statusCode: status, payload: payload)
             }
@@ -626,8 +626,8 @@ public actor AnisetteDataProvider {
         request.cachePolicy = .reloadIgnoringLocalCacheData
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard let httpResp = response as? HTTPURLResponse, httpResp.isSuccess else {
+            let status = (response as? HTTPURLResponse)?.safeStatusCode ?? -1
             throw AnisetteError.serverListFetchFailed("Server returned HTTP \(status)")
         }
 
@@ -660,7 +660,7 @@ public actor AnisetteDataProvider {
         ]
         postReq.httpBody = try JSONSerialization.data(withJSONObject: payload)
         let (data, response) = try await URLSession.shared.data(for: postReq)
-        guard let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode),
+        guard let httpResp = response as? HTTPURLResponse, httpResp.isSuccess,
               let json = try JSONSerialization.jsonObject(with: data) as? [String: String] else {
             throw AnisetteError.invalidAnisetteData
         }
@@ -696,9 +696,9 @@ public actor AnisetteDataProvider {
         clientInfoReq.cachePolicy = .reloadIgnoringLocalCacheData
         clientInfoReq.timeoutInterval = 10
         let (clientInfoData, clientInfoResp) = try await URLSession.shared.data(for: clientInfoReq)
-        guard let httpResp = clientInfoResp as? HTTPURLResponse, (200...299).contains(httpResp.statusCode),
+        guard let httpResp = clientInfoResp as? HTTPURLResponse, httpResp.isSuccess,
               let clientInfoJSON = try? JSONSerialization.jsonObject(with: clientInfoData) as? [String: Any] else {
-            throw AnisetteError.badServerResponse(statusCode: (clientInfoResp as? HTTPURLResponse)?.statusCode ?? -1, payload: "Failed to fetch client_info from remote server")
+            throw AnisetteError.badServerResponse(statusCode: (clientInfoResp as? HTTPURLResponse)?.safeStatusCode ?? -1, payload: "Failed to fetch client_info from remote server")
         }
 
         let resolvedClientInfo = clientInfoJSON["client_info"] as? String ?? clientInfo
@@ -719,14 +719,14 @@ public actor AnisetteDataProvider {
 
         verboseLog("[Anisette-WebSocket] Fetching Apple provisioning URLs from GSA...")
         let (lookupData, lookupResp) = try await URLSession.shared.data(for: req)
-        guard let gsaResp = lookupResp as? HTTPURLResponse, (200...299).contains(gsaResp.statusCode),
+        guard let gsaResp = lookupResp as? HTTPURLResponse, gsaResp.isSuccess,
               let plist = try PropertyListSerialization.propertyList(from: lookupData, options: [], format: nil) as? [String: Any],
               let urls = plist["urls"] as? [String: String],
               let startURLString = urls["midStartProvisioning"],
               let startURL = URL(string: startURLString),
               let endURLString = urls["midFinishProvisioning"],
               let endURL = URL(string: endURLString) else {
-            let status = (lookupResp as? HTTPURLResponse)?.statusCode ?? -1
+            let status = (lookupResp as? HTTPURLResponse)?.safeStatusCode ?? -1
             let payload = String(data: lookupData, encoding: .utf8) ?? ""
             throw AnisetteError.badServerResponse(statusCode: status, payload: "Failed to parse Apple provisioning URLs from GSA lookup: \(payload)")
         }
@@ -878,8 +878,8 @@ public actor AnisetteDataProvider {
         request.cachePolicy = .reloadIgnoringLocalCacheData
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard let httpResp = response as? HTTPURLResponse, httpResp.isSuccess else {
+            let status = (response as? HTTPURLResponse)?.safeStatusCode ?? -1
             throw AnisetteError.downloadFailed("Server list request failed with HTTP \(status)")
         }
 
@@ -910,8 +910,8 @@ public actor AnisetteDataProvider {
             var odaReq = URLRequest(url: targetURL)
             odaReq.cachePolicy = .reloadIgnoringLocalCacheData
             let (odaData, odaResp) = try await URLSession.shared.data(for: odaReq)
-            guard let httpOdaResp = odaResp as? HTTPURLResponse, (200...299).contains(httpOdaResp.statusCode) else {
-                let status = (odaResp as? HTTPURLResponse)?.statusCode ?? -1
+            guard let httpOdaResp = odaResp as? HTTPURLResponse, httpOdaResp.isSuccess else {
+                let status = (odaResp as? HTTPURLResponse)?.safeStatusCode ?? -1
                 throw AnisetteError.downloadFailed("ODA metadata request failed with HTTP \(status)")
             }
 
@@ -925,8 +925,8 @@ public actor AnisetteDataProvider {
             var odaReq = URLRequest(url: fallbackURL)
             odaReq.cachePolicy = .reloadIgnoringLocalCacheData
             let (odaData, odaResp) = try await URLSession.shared.data(for: odaReq)
-            guard let httpOdaResp = odaResp as? HTTPURLResponse, (200...299).contains(httpOdaResp.statusCode) else {
-                let status = (odaResp as? HTTPURLResponse)?.statusCode ?? -1
+            guard let httpOdaResp = odaResp as? HTTPURLResponse, httpOdaResp.isSuccess else {
+                let status = (odaResp as? HTTPURLResponse)?.safeStatusCode ?? -1
                 throw AnisetteError.downloadFailed("Fallback ODA metadata request failed with HTTP \(status)")
             }
 
@@ -960,8 +960,8 @@ public actor AnisetteDataProvider {
             request.cachePolicy = .reloadIgnoringLocalCacheData
             let (downloadedData, response) = try await URLSession.shared.data(for: request)
 
-            guard let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) else {
-                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            guard let httpResp = response as? HTTPURLResponse, httpResp.isSuccess else {
+                let status = (response as? HTTPURLResponse)?.safeStatusCode ?? -1
                 throw AnisetteError.downloadFailed("Package download failed with HTTP \(status)")
             }
 
