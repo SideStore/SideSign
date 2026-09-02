@@ -31,11 +31,16 @@ private func getFormattedTimestamp(config: LogFormatConfig = LogFormatConfig()) 
     let ms = Int32(tv.tv_usec / 1000)
 
     var timeBuf = [CChar](repeating: 0, count: 64)
-    strftime(&timeBuf, timeBuf.count, config.dateFormat, &tm_info)
-
-    var buf = [CChar](repeating: 0, count: 96)
-    snprintf(&buf, buf.count, "%s.%03d", timeBuf, ms)
-    return String(cString: buf)
+    let len = strftime(&timeBuf, timeBuf.count - 5, config.dateFormat, &tm_info)
+    if len > 0 {
+        timeBuf[len] = 46 // '.'
+        timeBuf[len + 1] = CChar(48 + (ms / 100))
+        timeBuf[len + 2] = CChar(48 + ((ms / 10) % 10))
+        timeBuf[len + 3] = CChar(48 + (ms % 10))
+        timeBuf[len + 4] = 0
+        return String(cString: timeBuf)
+    }
+    return ""
 }
 
 private func getTag(level: String, config: LogFormatConfig = LogFormatConfig()) -> String {
