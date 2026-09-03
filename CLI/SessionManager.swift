@@ -36,26 +36,24 @@ public enum SessionStorageError: LocalizedError, Sendable {
 public struct SessionManager: Sendable {
 
     public static var defaultSessionDirectory: URL {
+        #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
+        if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            return appSupport.appendingPathComponent(Constants.Anisette.defaultBaseDirName, isDirectory: true)
+                .appendingPathComponent(Constants.Session.sessionSubdirectory, isDirectory: true)
+        }
+        #endif
+
         let env = ProcessInfo.processInfo.environment
-
+        let baseDir: URL
         if let xdgConfig = env[Constants.Session.envXDGConfig], !xdgConfig.isEmpty {
-            return URL(fileURLWithPath: xdgConfig).appendingPathComponent(Constants.Session.defaultDirName)
-        }
-
-        if let appData = env[Constants.Session.envAppData], !appData.isEmpty {
-            return URL(fileURLWithPath: appData).appendingPathComponent(Constants.Session.defaultDirName)
-        }
-
-        let homeDir: String
-        if let home = env[Constants.Session.envHome], !home.isEmpty {
-            homeDir = home
+            baseDir = URL(fileURLWithPath: xdgConfig).appendingPathComponent(Constants.Anisette.defaultBaseDirName, isDirectory: true)
+        } else if let appData = env[Constants.Session.envAppData], !appData.isEmpty {
+            baseDir = URL(fileURLWithPath: appData).appendingPathComponent(Constants.Session.defaultDirName, isDirectory: true)
         } else {
-            homeDir = NSHomeDirectory()
+            let home = env[Constants.Session.envHome] ?? NSHomeDirectory()
+            baseDir = URL(fileURLWithPath: home, isDirectory: true).appendingPathComponent(Constants.Anisette.defaultBaseDirName, isDirectory: true)
         }
-
-        return URL(fileURLWithPath: homeDir)
-            .appendingPathComponent(Constants.Session.defaultConfigDir)
-            .appendingPathComponent(Constants.Session.defaultDirName)
+        return baseDir.appendingPathComponent(Constants.Session.sessionSubdirectory, isDirectory: true)
     }
 
     public static var defaultSessionURL: URL {

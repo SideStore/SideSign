@@ -87,6 +87,7 @@ public enum Constants {
         case phone         = "phone"
     }
 
+
     public enum Session {
         public static let autoMagic: [UInt8]         = [0x53, 0x53, 0x30, 0x31] // "SS01"
         public static let passMagic: [UInt8]         = [0x53, 0x53, 0x30, 0x32] // "SS02"
@@ -97,6 +98,7 @@ public enum Constants {
         public static let keyOutputLength            = 32
         public static let defaultDirName             = "sidesign"
         public static let defaultConfigDir           = ".config"
+        public static let sessionSubdirectory        = "session"
         public static let defaultFileName            = "session.dat"
         public static let filePrefix                 = "session_"
         public static let fileExtension              = ".dat"
@@ -118,9 +120,18 @@ public enum Constants {
     }
 
     public enum Anisette {
-        public static let defaultUserAgent = "akd/1.0 CFNetwork/1408.0.4 Darwin/22.5.0"
-        public static let defaultMdLu      = ""
-        public static let defaultMdRinfo   = "17106176"
+        public static let defaultBaseDirName          = ".sidesign"
+        public static let localLibsSubdirectory       = "local-libs"
+        public static let remoteLibsSubdirectory      = "remote-libs"
+        public static let provisioningSubdirectory    = "provisioning"
+        public static let defaultUserAgent            = "akd/1.0 CFNetwork/1408.0.4 Darwin/22.5.0"
+        public static let defaultMdLu                 = ""
+        public static let defaultMdRinfo              = "17106176"
+        public static let defaultDeviceSerialNumber   = "0"
+        public static let iso8601DateFormat           = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        public static let posixLocaleIdentifier       = "en_US_POSIX"
+        public static let defaultTimeZoneAbbreviation = "UTC"
+        public static let cachingPollingDelayNanoseconds: UInt64 = 200_000_000
     }
 }
 

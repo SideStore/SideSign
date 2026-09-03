@@ -239,53 +239,55 @@ public typealias OnDeviceAnisetteError = AnisetteError
 public actor AnisetteDataProvider {
     public static let shared = AnisetteDataProvider()
 
-    public static let hiddenBaseDirectoryName = ".anisette"
-    public static let libsDirName = "Libraries"
-    public static let provisioningDirName = "Provisioning"
-    public static let appSupportSubdirectory = "SideStore"
-    public static let defaultDeviceSerialNumber = "0"
-    public static let iso8601DateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
-    public static let posixLocaleIdentifier = "en_US_POSIX"
-    public static let defaultTimeZoneAbbreviation = "UTC"
-    public static let cachingPollingDelayNanoseconds: UInt64 = 200_000_000
-
     public var activeMode: AnisetteMode?
     public nonisolated let baseAnisetteDirectory: URL
     private var localProvider: LocalAnisetteProvider?
     private var isCaching: Bool = false
 
+    public static var defaultBaseDirectory: URL {
+        #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
+        if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            return appSupport.appendingPathComponent(Constants.Anisette.defaultBaseDirName, isDirectory: true)
+        }
+        #endif
+
+        let env = ProcessInfo.processInfo.environment
+        if let xdgConfig = env[Constants.Session.envXDGConfig], !xdgConfig.isEmpty {
+            return URL(fileURLWithPath: xdgConfig).appendingPathComponent(Constants.Anisette.defaultBaseDirName, isDirectory: true)
+        }
+        if let appData = env[Constants.Session.envAppData], !appData.isEmpty {
+            return URL(fileURLWithPath: appData).appendingPathComponent(Constants.Session.defaultDirName, isDirectory: true)
+        }
+        let home = env[Constants.Session.envHome] ?? NSHomeDirectory()
+        return URL(fileURLWithPath: home, isDirectory: true).appendingPathComponent(Constants.Anisette.defaultBaseDirName, isDirectory: true)
+    }
+
     public init(mode: AnisetteMode? = nil, baseDirectory: URL? = nil) {
         self.activeMode = mode
-        if let base = baseDirectory {
-            self.baseAnisetteDirectory = base
-        } else {
-            #if os(macOS)
-            let homeDir = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-            self.baseAnisetteDirectory = homeDir.appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
-            #elseif canImport(Darwin)
-            if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-                self.baseAnisetteDirectory = appSupport.appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
-            } else {
-                self.baseAnisetteDirectory = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-                    .appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
-            }
-            #else
-            self.baseAnisetteDirectory = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-                .appendingPathComponent(Self.hiddenBaseDirectoryName, isDirectory: true)
-            #endif
-        }
+        self.baseAnisetteDirectory = baseDirectory ?? Self.defaultBaseDirectory
     }
 
     public func setMode(_ mode: AnisetteMode) {
         self.activeMode = mode
     }
 
-    public nonisolated var libsDir: URL {
-        baseAnisetteDirectory.appendingPathComponent(Self.libsDirName, isDirectory: true)
+    public nonisolated var localLibsDir: URL {
+        baseAnisetteDirectory.appendingPathComponent(Constants.Anisette.localLibsSubdirectory, isDirectory: true)
+    }
+
+    public nonisolated var remoteLibsDir: URL {
+        baseAnisetteDirectory.appendingPathComponent(Constants.Anisette.remoteLibsSubdirectory, isDirectory: true)
     }
 
     public nonisolated var provisioningDir: URL {
-        baseAnisetteDirectory.appendingPathComponent(Self.provisioningDirName, isDirectory: true)
+        baseAnisetteDirectory.appendingPathComponent(Constants.Anisette.provisioningSubdirectory, isDirectory: true)
+    }
+
+    public nonisolated var libsDir: URL {
+        if LocalAnisetteProvider.validateLibrariesExist(at: localLibsDir) {
+            return localLibsDir
+        }
+        return remoteLibsDir
     }
 
     public func isReady() -> Bool {
