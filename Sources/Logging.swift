@@ -89,6 +89,22 @@ func formatPayload(_ data: Data) -> String? {
     return nil
 }
 
+func formatSanitizedTokens(_ tokensDictionary: [String: any Sendable]) -> String {
+    guard let appTokens = tokensDictionary["t"] as? [String: [String: Any]] else {
+        return prettyJSONString(from: tokensDictionary)
+    }
+
+    var sanitized = tokensDictionary
+    sanitized["t"] = appTokens.mapValues { app in
+        guard let token = app["token"] as? String else { return app }
+        var updated = app
+        let suffix = token.count > 4 ? token.suffix(4) : token[...]
+        updated["token"] = "••••••••\(suffix)"
+        return updated
+    }
+    return prettyJSONString(from: sanitized)
+}
+
 private func formatPayloadString(_ str: String) -> String {
     let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
     if trimmed.hasPrefix("<") {

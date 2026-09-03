@@ -41,7 +41,7 @@ public extension DeveloperPortal {
 }
 
 public protocol DeveloperPortalAPI: Sendable {
-    func authenticate(appleID unsanitizedAppleID: String, password: String, anisetteData: AnisetteData, xcodeVersion: String, verificationHandler: DeveloperPortal.VerificationHandler?) async throws -> AuthSession
+    func authenticate(appleID unsanitizedAppleID: String, password: String, anisetteData: AnisetteData, xcodeVersion: String, machinePassword: String?, verificationHandler: DeveloperPortal.VerificationHandler?) async throws -> AuthSession
     func fetchAccount(session: Session) async throws -> Account
     func fetchTeams(for account: Account, session: Session) async throws -> [Team]
     
@@ -75,8 +75,12 @@ public protocol DeveloperPortalAPI: Sendable {
 }
 
 public extension DeveloperPortalAPI {
-    func authenticate(appleID unsanitizedAppleID: String, password: String, anisetteData: AnisetteData, xcodeVersion: String) async throws -> AuthSession {
-        try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: nil)
+    func authenticate(appleID unsanitizedAppleID: String, password: String, anisetteData: AnisetteData, xcodeVersion: String, verificationHandler: DeveloperPortal.VerificationHandler? = nil) async throws -> AuthSession {
+        try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, machinePassword: nil, verificationHandler: verificationHandler)
+    }
+
+    func authenticate(appleID unsanitizedAppleID: String, password: String, anisetteData: AnisetteData, xcodeVersion: String, machinePassword: String?) async throws -> AuthSession {
+        try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, machinePassword: machinePassword, verificationHandler: nil)
     }
 
     func fetchDevices(for team: Team, session: Session) async throws -> [Device] {

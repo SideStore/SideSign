@@ -15,6 +15,7 @@ public extension DeveloperPortal {
                       password: String,
                       anisetteData: AnisetteData,
                       xcodeVersion: String,
+                      machinePassword: String? = nil,
                       verificationHandler: DeveloperPortal.VerificationHandler? = nil) async throws -> AuthSession
     {
         let sanitizedAppleID = unsanitizedAppleID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -191,7 +192,7 @@ public extension DeveloperPortal {
                 throw DeveloperPortalError.requiresTwoFactorAuthentication
             }
             try await requestTrustedDeviceTwoFactorCode(dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
-            return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
+            return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, machinePassword: machinePassword, verificationHandler: verificationHandler)
 
         case _ where authType.flatMap(Constants.SecondaryAuthType.init) != nil:
             guard let verificationHandler else {
@@ -205,7 +206,7 @@ public extension DeveloperPortal {
                 ?? ((completeResponseDictionary["trustedPhoneNumbers"] as? [[String: any Sendable]])?.first)
             let initialPhoneID = (phoneDict?["id"] as? CustomStringConvertible)?.description
             try await requestSMSTwoFactorCode(mode: requestedMode, phoneID: initialPhoneID, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
-            return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
+            return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, machinePassword: machinePassword, verificationHandler: verificationHandler)
 
         case "repair":
             let repairURLString = (completeResponseDictionary["repairUrl"] as? String)
@@ -244,14 +245,23 @@ public extension DeveloperPortal {
                 "u": dsid
             ]
 
-            let authToken = try await fetchAuthToken(app: app, parameters: appTokensParameters, sessionKey: sessionKey, anisetteData: anisetteData)
-            let session = Session(dsid: dsid, authToken: authToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion)
+            let fetchedToken = try await fetchAuthToken(app: app, parameters: appTokensParameters, sessionKey: sessionKey, anisetteData: anisetteData)
+            let session = Session(
+                dsid: dsid,
+                authToken: fetchedToken.token,
+                anisetteData: anisetteData,
+                xcodeVersion: xcodeVersion,
+                machinePassword: machinePassword,
+                creationDate: fetchedToken.creationDate,
+                expirationDate: fetchedToken.expirationDate,
+                timeToLive: fetchedToken.timeToLive
+            )
             let account = try await fetchAccount(session: session)
             return AuthSession(account: account, session: session)
         }
     }
 
-    private func sendAuthenticationRequest(parameters requestParameters: [String: any Sendable], anisetteData: AnisetteData) async throws -> [String: any Sendable] {
+    func sendAuthenticationRequest(parameters requestParameters: [String: any Sendable], anisetteData: AnisetteData) async throws -> [String: any Sendable] {
         let requestURL = Constants.URLs.grandSlamAuth
 
         let parameters: [String: any Sendable] = [
@@ -322,7 +332,14 @@ public extension DeveloperPortal {
         return dictionary
     }
 
-    private func fetchAuthToken(app: String, parameters: [String: any Sendable], sessionKey: Data, anisetteData: AnisetteData) async throws -> String {
+    private struct FetchedAuthToken {
+        let token: String
+        let creationDate: Date
+        let expirationDate: Date?
+        let timeToLive: TimeInterval?
+    }
+
+    private func fetchAuthToken(app: String, parameters: [String: any Sendable], sessionKey: Data, anisetteData: AnisetteData) async throws -> FetchedAuthToken {
         let responseDictionary = try await sendAuthenticationRequest(parameters: parameters, anisetteData: anisetteData)
 
         guard let encryptedToken = responseDictionary["et"] as? Data else {
@@ -361,8 +378,41 @@ public extension DeveloperPortal {
             throw ServerError.missingKey(key: "t/\(app)/token", jsonPayload: payload)
         }
 
-        debugLog("[SideSign] Successfully obtained auth token for app: \(app)")
-        return authToken
+        verboseLog("[SideSign] Decrypted GrandSlam response: \(prettyJSONString(from: sanitizeTokens(tokensDictionary)))")
+
+        let now = Date()
+        var expirationDate: Date? = nil
+        var timeToLive: TimeInterval? = nil
+
+        if let expiry = tokens["expiry"] as? Date {
+            expirationDate = expiry
+            timeToLive = expiry.timeIntervalSince(now)
+        } else if let expiryStr = tokens["expiry"] as? String, let parsed = ISO8601DateFormatter().date(from: expiryStr) {
+            expirationDate = parsed
+            timeToLive = parsed.timeIntervalSince(now)
+        } else if let ttl = tokens["ttl"] as? Double ?? (tokens["ttl"] as? Int).map(Double.init) {
+            timeToLive = ttl
+            expirationDate = now.addingTimeInterval(ttl)
+        } else if let exp = tokens["expiry-date"] as? Date {
+            expirationDate = exp
+            timeToLive = exp.timeIntervalSince(now)
+        } else if let expStr = tokens["expiry-date"] as? String, let parsed = ISO8601DateFormatter().date(from: expStr) {
+            expirationDate = parsed
+            timeToLive = parsed.timeIntervalSince(now)
+        }
+
+        let ttlDesc: String
+        if let ttl = timeToLive {
+            let days = Int(ttl / 86400)
+            let hours = Int((ttl.truncatingRemainder(dividingBy: 86400)) / 3600)
+            ttlDesc = "\(days)d \(hours)h (\(Int(ttl))s)"
+        } else {
+            ttlDesc = "unspecified"
+        }
+
+        let expiryDesc = expirationDate.map { ISO8601DateFormatter().string(from: $0) } ?? "unspecified"
+        debugLog("[SideSign] Successfully obtained auth token for app: \(app) (TTL: \(ttlDesc), Expiry: \(expiryDesc))")
+        return FetchedAuthToken(token: authToken, creationDate: now, expirationDate: expirationDate, timeToLive: timeToLive)
     }
 
     private func parseTrustedPhoneNumbers(from dict: [String: any Sendable]?) -> [TrustedPhoneNumber] {
