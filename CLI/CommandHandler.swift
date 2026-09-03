@@ -694,8 +694,8 @@ public enum CommandHandler {
             try handleAuthSelectTeam(index: index)
         case .selectTeamID(let teamID):
             try handleAuthSelectTeamID(teamID: teamID)
-        case .logout(let sessionPath, let teamID):
-            try handleAuthLogout(sessionPath: sessionPath, teamID: teamID)
+        case .logout(let sessionPath, let teamID, let clearMachine):
+            try handleAuthLogout(sessionPath: sessionPath, teamID: teamID, clearMachine: clearMachine)
         case .status(let sessionPath, let password, let encryptPassword, let teamID):
             try handleAuthStatus(sessionPath: sessionPath, password: password, encryptPassword: encryptPassword, teamID: teamID)
         case .relogin(let options):
@@ -758,10 +758,14 @@ public enum CommandHandler {
         print("Updated default session: \(SessionManager.defaultSessionURL.path)")
     }
 
-    private static func handleAuthLogout(sessionPath: String?, teamID: String?) throws {
+    private static func handleAuthLogout(sessionPath: String?, teamID: String?, clearMachine: Bool) throws {
         let sessionURL = sessionPath.map { URL(fileURLWithPath: $0) } ?? SessionManager.url(for: teamID)
         try SessionManager.clear(at: sessionURL)
         print("Logged out. Session cleared at \(sessionURL.path).")
+        if clearMachine {
+            try DeviceDataManager.clear(at: nil)
+            print("Local device data (machine.dat) cleared.")
+        }
     }
 
     private static func handleAuthStatus(sessionPath: String?, password: String?, encryptPassword: String?, teamID: String?) throws {

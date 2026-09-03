@@ -14,7 +14,7 @@ public enum PortalCommandsParser {
     Usage:
       sidesign dev login --apple-id <email> [--password <pwd>] [--session <path>] [--encrypt-password <pwd>]
       sidesign dev relogin [--session <path>] [--password <pwd>]
-      sidesign dev logout [--session <path>]
+      sidesign dev logout [--session <path>] [--clear-machine]
       sidesign dev status [--session <path>] [--password <pwd>]
       sidesign dev list
       sidesign dev select-team <index>
@@ -484,7 +484,8 @@ public enum PortalCommandsParser {
             }
             return .selectTeamID(teamID: tID)
         case actions["logout"]:
-            return .logout(sessionPath: portalOpts.sessionPath, teamID: portalOpts.teamID)
+            let clearMachine = subArgs.contains("--clear-machine") || subArgs.contains("--all") || subArgs.contains("-a")
+            return .logout(sessionPath: portalOpts.sessionPath, teamID: portalOpts.teamID, clearMachine: clearMachine)
         case actions["status"]:
             return .status(sessionPath: portalOpts.sessionPath, password: portalOpts.password, encryptPassword: portalOpts.encryptPassword, teamID: portalOpts.teamID)
         case actions["relogin"]:
