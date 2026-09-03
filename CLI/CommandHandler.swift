@@ -130,7 +130,7 @@ public enum CommandHandler {
                     let outName = targetURL.deletingPathExtension().lastPathComponent + "_signed.ipa"
                     finalOutURL = targetURL.deletingLastPathComponent().appendingPathComponent(outName)
                 }
-                let zippedIPA = try FileManager.default.zipAppBundle(at: appURL, compressionLevel: .fastest)
+                let zippedIPA = try FileManager.default.zipAppBundle(at: appURL, compressionLevel: .none)
                 if FileManager.default.fileExists(atPath: finalOutURL.path) {
                     try FileManager.default.removeItem(at: finalOutURL)
                 }
@@ -392,7 +392,7 @@ public enum CommandHandler {
                     let outName = targetURL.deletingPathExtension().lastPathComponent + "_no_ext.ipa"
                     finalOutURL = targetURL.deletingLastPathComponent().appendingPathComponent(outName)
                 }
-                let zippedIPA = try FileManager.default.zipAppBundle(at: appURL, compressionLevel: .fastest)
+                let zippedIPA = try FileManager.default.zipAppBundle(at: appURL, compressionLevel: .none)
                 if FileManager.default.fileExists(atPath: finalOutURL.path) {
                     try FileManager.default.removeItem(at: finalOutURL)
                 }
@@ -417,7 +417,7 @@ public enum CommandHandler {
             let inputURL = URL(fileURLWithPath: inputPath)
             let outIPA = outputPath.map { URL(fileURLWithPath: $0) } ?? inputURL.deletingLastPathComponent().appendingPathComponent(inputURL.deletingPathExtension().lastPathComponent + ".ipa")
             print("[Package] Packaging \(inputURL.lastPathComponent) to \(outIPA.path)...")
-            let createdIPA = try FileManager.default.zipAppBundle(at: inputURL, compressionLevel: .fastest)
+            let createdIPA = try FileManager.default.zipAppBundle(at: inputURL, compressionLevel: .none)
             if createdIPA != outIPA {
                 if FileManager.default.fileExists(atPath: outIPA.path) {
                     try FileManager.default.removeItem(at: outIPA)

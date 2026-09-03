@@ -118,7 +118,7 @@ extension FileManager {
         public static let maximum: CompressionLevel   = 9
     }
 
-    public func zipAppBundle(at appBundleURL: URL, compressionLevel: CompressionLevel = .fastest) throws -> URL {
+    public func zipAppBundle(at appBundleURL: URL, compressionLevel: CompressionLevel = .none) throws -> URL {
         verboseLog("[SideSign] FileManager.zipAppBundle starting for: \(appBundleURL.path)")
         let name = appBundleURL.deletingPathExtension().lastPathComponent
 

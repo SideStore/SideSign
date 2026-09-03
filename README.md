@@ -8,7 +8,7 @@ A Swift library for resigning iOS apps, provisioning developer certificates, and
 
 - **Cryptography & Code Signing**: Powered by [CodeSignKit](https://github.com/mahee96/CodeSignKit) for CMS/PKCS#7 signature generation, PKCS#12 archive parsing/export, and Mach-O binary signing.
 - **Apple SRP & GrandSlam Protocol**: uses [GSACryptoKit](https://github.com/mahee96/GSACryptoKit) for secure SRP-6a cryptographic handshakes and performs Authentication using GrandSlam Authentication (GSA) flow.
-- **Streaming Zip Support**: High-Speed IPA unpacking and repacking backed by [minizip-ng](https://github.com/SideStore/minizip-ng) with exact POSIX permission preservation.
+- **Streaming Zip Support**: High-Speed IPA unpacking and repacking backed by [libdeflate](https://github.com/SideStore/libdeflate) with exact POSIX permission preservation.
 - **Full Bundle & Extension Resigning**: In-Depth resigning support for main executables, app extensions, plugins, and embedded frameworks.
 
 ---
@@ -25,7 +25,7 @@ A Swift library for resigning iOS apps, provisioning developer certificates, and
              │                            │                            │
              ▼                            ▼                            ▼
      ┌───────────────┐            ┌───────────────┐            ┌───────────────┐
-     │  CodeSignKit  │            │ GSACryptoKit  │            │  minizip-ng   │
+     │  CodeSignKit  │            │ GSACryptoKit  │            │  libdeflate   │
      │ (CMS, PKCS#12,│            │(SRP-6a Client │            │  (Streaming   │
      │  Mach-O, CD)  │            │  Crypto utils)│            │   Zip Engine) │
      └───────────────┘            └───────────────┘            └───────────────┘
@@ -60,7 +60,7 @@ A Swift library for resigning iOS apps, provisioning developer certificates, and
 
 ### 4. High-Performance Archive Streaming (`Archive`)
 
-- Reads and writes ZIP/IPA archives via direct Swift wrappers over `minizip-ng`.
+- Reads and writes ZIP/IPA archives via direct Swift engine backed by `libdeflate`.
 - Preserves executable bits, symbolic links, and POSIX file modes.
 
 ---

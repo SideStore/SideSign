@@ -34,12 +34,12 @@ let package = Package(
 
         .package(url: "https://github.com/mahee96/CodeSignKit.git",   branch: "main"),
         .package(url: "https://github.com/mahee96/GSACryptoKit.git",  branch: "main"),
-        .package(url: "https://github.com/SideStore/minizip-ng",      branch: "develop"),
+        .package(url: "https://github.com/SideStore/libdeflate",      branch: "master"),
         .package(url: "https://github.com/mahee96/AnisetteKit.git",   branch: "main"),
 
 //        .package(name: "CodeSignKit",  path: "../../local/CodeSignKit"),
 //        .package(name: "GSACryptoKit", path: "../../local/GSACryptoKit"),
-//        .package(name: "minizip-ng",    path: "../../local/minizip-ng")
+//        .package(name: "libdeflate",   path: "../../local/libdeflate"),
 //        .package(name: "AnisetteKit",   path: "../../local/AnisetteKit")
     ],
 
@@ -47,7 +47,7 @@ let package = Package(
         .target(
             name: "SideSign",
             dependencies: [
-                .product(name: "minizip-ng", package: "minizip-ng"),
+                .product(name: "libdeflate", package: "libdeflate"),
                 .product(name: "Crypto", package: "swift-crypto"),
                 "AnisetteKit",
                 "CodeSignKit",

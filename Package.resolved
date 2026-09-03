@@ -29,12 +29,12 @@
       }
     },
     {
-      "identity" : "minizip-ng",
+      "identity" : "libdeflate",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/SideStore/minizip-ng",
+      "location" : "https://github.com/SideStore/libdeflate",
       "state" : {
-        "branch" : "develop",
-        "revision" : "12a8ab8ccac4a36d4a45340921c7de5f18b0efab"
+        "branch" : "master",
+        "revision" : "da6c7dae03b78dc71af973664575e4209786fbfe"
       }
     },
     {
