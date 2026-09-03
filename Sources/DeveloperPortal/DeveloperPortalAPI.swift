@@ -69,6 +69,9 @@ public protocol DeveloperPortalAPI: Sendable {
     func fetchProvisioningProfiles(for team: Team, session: Session) async throws -> [ProvisioningProfile]
     func downloadProvisioningProfile(for appID: AppID, deviceType: DeviceType, team: Team, session: Session) async throws -> ProvisioningProfile
     func deleteProvisioningProfile(_ profile: ProvisioningProfile, team: Team, session: Session) async throws -> Bool
+
+    func fetchAuthDevices(session: Session) async throws -> [AuthDevice]
+    func removeAuthDevice(id: String, session: Session) async throws -> Bool
 }
 
 public extension DeveloperPortalAPI {

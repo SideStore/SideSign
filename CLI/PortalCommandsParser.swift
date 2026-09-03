@@ -21,6 +21,7 @@ public enum PortalCommandsParser {
       sidesign dev select-team-id <team_id>
       sidesign dev teams [--session <path>]
       sidesign dev devices list / register --name <name> --udid <udid> [--session <path>]
+      sidesign dev auth-devices list / remove <device_id> / purge-anisette [--session <path>]
       sidesign dev certs list / create / revoke --id <id> [--session <path>]
       sidesign dev appids list / register --name <name> --bundle-id <id> / delete --id <id> [--session <path>]
       sidesign dev appgroups list / create --name <name> --group-id <id> / assign --app-id <id> --group-id <id> [--session <path>]
@@ -37,6 +38,7 @@ public enum PortalCommandsParser {
         "login":        ["login"],
         "teams":        ["teams"],
         "devices":      ["devices"],
+        "authDevices":  ["auth-devices", "authdevices", "account-devices"],
         "certs":        ["certs"],
         "appids":       ["appids"],
         "appgroups":    ["appgroups"],
@@ -439,6 +441,25 @@ public enum PortalCommandsParser {
         return .profiles(PortalProfileOptions(action: subAction, portalOptions: opts))
     }
 
+    private static func parseAuthDevices(subArgs: [String], opts: PortalOptions) throws -> PortalRequestContext {
+        let cleanArgs = subArgs.filter { !$0.hasPrefix("-") }
+        let subAction = cleanArgs.first ?? "list"
+
+        switch subAction {
+        case "list", "ls":
+            return .authDevices(PortalAuthDeviceOptions(action: .list, portalOptions: opts))
+        case "remove", "delete", "rm":
+            guard cleanArgs.count > 1 else {
+                throw CLIError.missingRequiredArgument("Device ID required to remove (e.g. sidesign auth auth-devices remove <id>)")
+            }
+            return .authDevices(PortalAuthDeviceOptions(action: .remove(deviceID: cleanArgs[1]), portalOptions: opts))
+        case "purge", "purge-anisette", "clear-anisette":
+            return .authDevices(PortalAuthDeviceOptions(action: .purgeAnisette, portalOptions: opts))
+        default:
+            throw CLIError.invalidArgument("Unknown auth-devices subcommand: \(subAction). Supported: list, remove <id>, purge-anisette")
+        }
+    }
+
     public static func parse(args: [String]) throws -> PortalRequestContext {
         guard let action = args.first else {
             throw CLIError.missingRequiredArgument(usageText)
@@ -472,6 +493,8 @@ public enum PortalCommandsParser {
             return .teams(portalOpts)
         case actions["devices"]:
             return try parseDevices(subArgs: subArgs, opts: portalOpts)
+        case actions["authDevices"]:
+            return try parseAuthDevices(subArgs: subArgs, opts: portalOpts)
         case actions["certs"]:
             return try parseCerts(subArgs: subArgs, opts: portalOpts)
         case actions["appids"]:

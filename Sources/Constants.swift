@@ -17,6 +17,7 @@ public enum Constants {
     public static let clientID                = "XABBG36SBA"
     public static let appIDKey                = "ba2ec180e6ca6e6c6a542255453b24d6e6e5b2be0cc48bc1b0d8ad64cfe0228f"
     public static let userAgent               = "AuthKit/1 (Macintosh; OS X 26.6) (com.apple.dt.Xcode/26.0)"
+    public static let authKitUserAgent        = "AuthKit/1 (Macintosh; OS X 26.6)"
     public static let xcodeUserAgent          = "Xcode"
     public static let authApp                 = "com.apple.gs.xcode.auth"
     public static let defaultAccountRepairMessage = "Your Apple ID requires account verification or terms agreement.\n" + 
@@ -42,6 +43,7 @@ public enum Constants {
         public static let phoneSecurityCode         = URL(string: "\(phoneBase)/securitycode?referrer=/auth/verify/phone/put")!
         public static let smsPut                    = URL(string: "https://gsa.apple.com/auth/verify/phone/put?mode=sms")!
         public static let smsSecurityCode           = URL(string: "https://gsa.apple.com/auth/verify/phone/securitycode?referrer=/auth/verify/phone/put")!
+        public static let appleAuthDevices          = URL(string: "https://idmsa.apple.com/appleauth/auth/devices")!
 
         // Developer Portal Actions
         public static let viewDeveloper             = URL(string: "\(servicesBase)/viewDeveloper.action")!

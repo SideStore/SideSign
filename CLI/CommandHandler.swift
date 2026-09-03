@@ -704,6 +704,8 @@ public enum CommandHandler {
             try await handleAuthTeams(options: options)
         case .devices(let options):
             try await handleAuthDevices(options: options)
+        case .authDevices(let options):
+            try await handleAuthDevicesOperations(options: options)
         case .certs(let options):
             try await handleAuthCerts(options: options)
         case .appIDs(let options):
@@ -879,6 +881,74 @@ public enum CommandHandler {
                         print("  - \(d.name) (UDID: \(d.identifier))\(devIDStr)")
                     }
                 }
+            }
+        }
+    }
+
+    private static func handleAuthDevicesOperations(options: PortalAuthDeviceOptions) async throws {
+        try await executePortalOperation(options: options.portalOptions) { portal, _, session in
+
+            switch options.action {
+            case .list:
+                print("Fetching auth devices...")
+                let devices = try await portal.fetchAuthDevices(session: session)
+                if devices.isEmpty {
+                    print("No auth devices found or device list is empty.")
+                    return
+                }
+                print("\nAuth Devices (\(devices.count)):")
+                for (idx, d) in devices.enumerated() {
+                    let currentMarker = d.isCurrentDevice ? " [This Device]" : ""
+                    let modelStr = d.modelDisplayName ?? d.model ?? "Unknown Model"
+                    let osStr = d.osVersion.map { " (OS: \($0))" } ?? ""
+                    let serialStr = d.serialNumber.map { " [Serial: \($0)]" } ?? ""
+                    print("  \(idx + 1). \(d.name) - \(modelStr)\(osStr)\(serialStr)")
+                    print("     ID: \(d.id)\(currentMarker)")
+                }
+                print("")
+
+            case .remove(let deviceID):
+                print("Removing auth device '\(deviceID)' from account...")
+                let success = try await portal.removeAuthDevice(id: deviceID, session: session)
+                if success {
+                    print("Successfully removed auth device '\(deviceID)' from account.")
+                } else {
+                    throw CLIError.executionFailed("Failed to remove auth device '\(deviceID)' from account.")
+                }
+
+            case .purgeAnisette:
+                print("Scanning auth devices for simulated Anisette machines...")
+                let devices = try await portal.fetchAuthDevices(session: session)
+                let candidates = devices.filter { d in
+                    if d.isCurrentDevice { return false }
+                    let n = d.name.lowercased()
+                    let m = (d.modelDisplayName ?? d.model ?? "").lowercased()
+                    return n == "mac"   || n.hasPrefix("macbook") || 
+                           n == "linux" || m.contains("mac")      || m.contains("linux")
+                }
+
+                if candidates.isEmpty {
+                    print("No simulated Anisette devices found to purge.")
+                    return
+                }
+
+                print("Found \(candidates.count) candidate device(s) to purge:")
+                for c in candidates {
+                    print("  - \(c.name) (ID: \(c.id))")
+                }
+
+                var removedCount = 0
+                for c in candidates {
+                    print("Removing '\(c.name)' (ID: \(c.id))...")
+                    do {
+                        if try await portal.removeAuthDevice(id: c.id, session: session) {
+                            removedCount += 1
+                        }
+                    } catch {
+                        printError("Failed to remove '\(c.name)': \(error.localizedDescription)")
+                    }
+                }
+                print("Purged \(removedCount)/\(candidates.count) simulated device(s) from account.")
             }
         }
     }

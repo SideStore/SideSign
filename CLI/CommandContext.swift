@@ -339,6 +339,22 @@ public struct PortalProfileOptions: Sendable {
     }
 }
 
+public struct PortalAuthDeviceOptions: Sendable {
+    public enum Action: Sendable {
+        case list
+        case remove(deviceID: String)
+        case purgeAnisette
+    }
+
+    public let action: Action
+    public let portalOptions: PortalOptions
+
+    public init(action: Action, portalOptions: PortalOptions) {
+        self.action = action
+        self.portalOptions = portalOptions
+    }
+}
+
 public enum PortalRequestContext: Sendable {
     case list
     case selectTeam(index: String?)
@@ -349,6 +365,7 @@ public enum PortalRequestContext: Sendable {
     case login(PortalLoginOptions)
     case teams(PortalOptions)
     case devices(PortalDeviceOptions)
+    case authDevices(PortalAuthDeviceOptions)
     case certs(PortalCertOptions)
     case appIDs(PortalAppIDOptions)
     case appGroups(PortalAppGroupOptions)
