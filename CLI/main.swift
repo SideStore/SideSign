@@ -88,6 +88,7 @@ private enum FlagRegistry {
         "usingTeamID":      ["--using-team-id", "--select-team-id", "--use-team", "-tid"],
         "local":            ["--local", "--local-adi", "-l"],
         "oda":              ["--oda", "-oda"],
+        "forceODA":         ["--force-oda", "--force-download-oda"],
         "server":           ["--server", "--url", "-srv", "-u"],
         "source":           ["--source", "--list", "-src"],
         "anisetteUDID":     ["--anisette-device-udid", "--anisette-udid", "-udid"],
@@ -547,6 +548,7 @@ private func parseAnisetteContext(args: [String]) throws -> AnisetteContext {
     var startIndex = 0
     var asJSON = false
     var strict = false
+    var forceODA = false
 
     var idx = 0
     func nextVal() -> String? {
@@ -566,6 +568,7 @@ private func parseAnisetteContext(args: [String]) throws -> AnisetteContext {
         case flags["usingTeamID"]:      teamID             = try nextVal().map { try CommandHandler.validateAndResolveTeamID($0) }
         case flags["local"]:            localDir           = nextVal()
         case flags["oda"]:              odaURL             = nextVal()
+        case flags["forceODA"]:         forceODA           = true
         case flags["server"]:           serverURL          = nextVal()
         case flags["source"]:           sourceURLStr       = nextVal()
         case flags["anisetteUDID"]:     anisetteDeviceUDID = nextVal()
@@ -593,7 +596,8 @@ private func parseAnisetteContext(args: [String]) throws -> AnisetteContext {
         enableFailover: enableFailover,
         startIndex: startIndex,
         asJSON: asJSON,
-        strict: strict
+        strict: strict,
+        forceODA: forceODA
     ))
 }
 

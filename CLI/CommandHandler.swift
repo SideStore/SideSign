@@ -498,7 +498,8 @@ public enum CommandHandler {
             let enableFailover,
             let startIndex,
             let asJSON,
-            let strict
+            let strict,
+            let forceODA
         ):
             if selectServer {
                 serverURL = try await selectAnisetteServerInteractively(sourceURLString: sourceURLStr)
@@ -520,7 +521,8 @@ public enum CommandHandler {
             } else if let dir = localDir {
                 mode = .localODA(libsDir: URL(fileURLWithPath: dir))
             } else if let odaStr = odaURL, let oURL = URL(string: odaStr) {
-                mode = .remoteODA(sourceURL: oURL)
+                try await AnisetteDataProvider.shared.setupFromRemote(serverSourceURL: oURL, force: forceODA)
+                mode = .localODA(libsDir: AnisetteDataProvider.shared.remoteLibsDir)
             } else if let sUrl = serverURL, let url = URL(string: sUrl) {
                 if strict {
                     let isValid = await AnisetteDataProvider.validateServer(url: url, strict: true)
@@ -1241,7 +1243,8 @@ public enum CommandHandler {
         } else if let dir = options.localAnisetteDir {
             mode = .localODA(libsDir: URL(fileURLWithPath: dir))
         } else if let odaStr = options.odaURL, let oURL = URL(string: odaStr) {
-            mode = .remoteODA(sourceURL: oURL)
+            try await AnisetteDataProvider.shared.setupFromRemote(serverSourceURL: oURL, force: options.forceODA)
+            mode = .localODA(libsDir: AnisetteDataProvider.shared.remoteLibsDir)
         } else if let sUrl = serverURL, let url = URL(string: sUrl) {
             if options.strict {
                 let isValid = await AnisetteDataProvider.validateServer(url: url, strict: true)

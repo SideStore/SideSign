@@ -936,17 +936,24 @@ public actor AnisetteDataProvider {
         }
     }
 
-    public func downloadAndCacheLibs(from oda: ODAInfo, clientInfo: String = LocalAnisetteProvider.defaultClientInfo) async throws {
+    public func downloadAndCacheLibs(from oda: ODAInfo, targetDirectory: URL? = nil, clientInfo: String = LocalAnisetteProvider.defaultClientInfo) async throws {
         guard !isCaching else {
             while isCaching {
-                try await Task.sleep(nanoseconds: Self.cachingPollingDelayNanoseconds)
+                try await Task.sleep(nanoseconds: Constants.Anisette.cachingPollingDelayNanoseconds)
             }
             return
         }
         isCaching = true
         defer { isCaching = false }
 
-        let libDir = libsDir
+        let libDir: URL
+        if let target = targetDirectory {
+            libDir = target
+            debugLog("[AnisetteDataProvider] Using custom target directory for libraries: \(libDir.path)")
+        } else {
+            libDir = remoteLibsDir
+            debugLog("[AnisetteDataProvider] Using default remote libraries directory: \(libDir.path)")
+        }
         let prov = provisioningDir
 
         let fm = FileManager.default
@@ -1005,9 +1012,14 @@ public actor AnisetteDataProvider {
         self.localProvider = provider
     }
 
-    public func setupFromRemote(serverSourceURL: URL, fallbackODAURL: URL? = nil, clientInfo: String = LocalAnisetteProvider.defaultClientInfo) async throws {
+    public func setupFromRemote(serverSourceURL: URL, fallbackODAURL: URL? = nil, force: Bool = false, clientInfo: String = LocalAnisetteProvider.defaultClientInfo) async throws {
+        let targetLibDir = remoteLibsDir
+        if !force && LocalAnisetteProvider.validateLibrariesExist(at: targetLibDir) {
+            debugLog("[AnisetteDataProvider] Remote libraries already present in \(targetLibDir.path), using cache.")
+            return
+        }
         let odaInfo = try await fetchODAInfo(from: serverSourceURL, fallbackODAURL: fallbackODAURL)
-        try await downloadAndCacheLibs(from: odaInfo, clientInfo: clientInfo)
+        try await downloadAndCacheLibs(from: odaInfo, targetDirectory: targetLibDir, clientInfo: clientInfo)
     }
 
     public func ensureProviderLoaded(clientInfo: String = LocalAnisetteProvider.defaultClientInfo) async throws -> LocalAnisetteProvider {

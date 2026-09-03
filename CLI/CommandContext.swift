@@ -185,7 +185,8 @@ public struct AnisetteContext: Sendable {
             enableFailover: Bool,
             startIndex: Int,
             asJSON: Bool,
-            strict: Bool
+            strict: Bool,
+            forceODA: Bool = false
         )
     }
 
@@ -206,6 +207,7 @@ public struct PortalOptions: Sendable {
     public let anisetteURL: String?
     public let localAnisetteDir: String?
     public let odaURL: String?
+    public let forceODA: Bool
     public let selectServer: Bool
     public let strict: Bool
     public let sourceURLStr: String?
@@ -222,6 +224,7 @@ public struct PortalOptions: Sendable {
         anisetteURL: String? = nil,
         localAnisetteDir: String? = nil,
         odaURL: String? = nil,
+        forceODA: Bool = false,
         selectServer: Bool = false,
         strict: Bool = false,
         sourceURLStr: String? = nil,
@@ -237,6 +240,7 @@ public struct PortalOptions: Sendable {
         self.anisetteURL = anisetteURL
         self.localAnisetteDir = localAnisetteDir
         self.odaURL = odaURL
+        self.forceODA = forceODA
         self.selectServer = selectServer
         self.strict = strict
         self.sourceURLStr = sourceURLStr

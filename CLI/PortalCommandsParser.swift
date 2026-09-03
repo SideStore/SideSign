@@ -57,6 +57,7 @@ public enum PortalCommandsParser {
         "anisetteURL":      ["--anisette-url", "--anisette", "--server", "-srv"],
         "localAnisette":    ["--local-anisette", "--local-adi", "--local", "-l"],
         "oda":              ["--oda", "-oda"],
+        "forceODA":         ["--force-oda", "--force-download-oda"],
         "source":           ["--source", "--list", "-src"],
         "selectServer":     ["--select-server", "-sel"],
         "failover":         ["--failover", "--auto-failover", "-f"],
@@ -119,6 +120,8 @@ public enum PortalCommandsParser {
             return args[i]
         }
 
+        var forceODA = false
+
         while i < args.count {
             switch args[i] {
             case flags["appleID"]:          appleID            = nextVal()
@@ -132,6 +135,7 @@ public enum PortalCommandsParser {
             case flags["anisetteURL"]:      anisetteURL        = nextVal()
             case flags["localAnisette"]:    localAnisetteDir   = nextVal()
             case flags["oda"]:              odaURL             = nextVal()
+            case flags["forceODA"]:         forceODA           = true
             case flags["source"]:           sourceURLStr       = nextVal()
             case flags["selectServer"]:     selectServer       = true
             case flags["failover"]:         enableFailover     = true
@@ -152,6 +156,7 @@ public enum PortalCommandsParser {
             anisetteURL: anisetteURL,
             localAnisetteDir: localAnisetteDir,
             odaURL: odaURL,
+            forceODA: forceODA,
             selectServer: selectServer,
             strict: strict,
             sourceURLStr: sourceURLStr,
