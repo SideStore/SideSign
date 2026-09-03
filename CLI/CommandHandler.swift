@@ -531,6 +531,8 @@ public enum CommandHandler {
                     }
                 }
                 mode = .remote(server: url)
+            } else if LocalAnisetteProvider.validateLibrariesExist(at: AnisetteDataProvider.shared.libsDir) {
+                mode = .localODA(libsDir: AnisetteDataProvider.shared.libsDir)
             } else {
                 throw CLIError.missingRequiredArgument("""
                 An Anisette mode is required. Specify one of:
@@ -1257,6 +1259,8 @@ public enum CommandHandler {
                 }
             }
             mode = .remote(server: url)
+        } else if LocalAnisetteProvider.validateLibrariesExist(at: AnisetteDataProvider.shared.libsDir) {
+            mode = .localODA(libsDir: AnisetteDataProvider.shared.libsDir)
         } else {
             throw CLIError.missingRequiredArgument("""
             An Anisette mode is required. Specify one of:
