@@ -9,6 +9,18 @@
 import Foundation
 import libdeflate
 
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Android)
+import Android
+#elseif canImport(Bionic)
+import Bionic
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#endif
+
 public enum Archive {
 
     public struct Entry: Sendable, Hashable {
@@ -313,7 +325,10 @@ public enum Archive {
 
         private func applyPermissions(_ permissions: UInt32, to url: URL) {
             #if !os(Windows)
-            chmod(url.path, mode_t(permissions))
+            #if canImport(Darwin) || canImport(Android) || canImport(Bionic) || canImport(Glibc) || canImport(Musl)
+            _ = chmod(url.path, mode_t(permissions))
+            #endif
+            try? FileManager.default.setAttributes([.posixPermissions: NSNumber(value: permissions)], ofItemAtPath: url.path)
             #endif
         }
     }
