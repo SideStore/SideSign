@@ -603,28 +603,34 @@ public enum Archive {
 
 private extension Data {
     func readUInt16LE(at offset: Int) -> UInt16 {
-        return self.withUnsafeBytes { raw in
-            raw.load(fromByteOffset: offset, as: UInt16.self).littleEndian
-        }
+        let idx = self.startIndex + offset
+        let b0 = UInt16(self[idx])
+        let b1 = UInt16(self[idx + 1])
+        return b0 | (b1 << 8)
     }
 
     func readUInt32LE(at offset: Int) -> UInt32 {
-        return self.withUnsafeBytes { raw in
-            raw.load(fromByteOffset: offset, as: UInt32.self).littleEndian
-        }
+        let idx = self.startIndex + offset
+        let b0 = UInt32(self[idx])
+        let b1 = UInt32(self[idx + 1])
+        let b2 = UInt32(self[idx + 2])
+        let b3 = UInt32(self[idx + 3])
+        return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
     }
 
     mutating func writeUInt16LE(_ value: UInt16, at offset: Int) {
         var v = value.littleEndian
         Swift.withUnsafeBytes(of: &v) { valBuf in
-            self.replaceSubrange(offset..<(offset + 2), with: valBuf)
+            let idx = self.startIndex + offset
+            self.replaceSubrange(idx..<(idx + 2), with: valBuf)
         }
     }
 
     mutating func writeUInt32LE(_ value: UInt32, at offset: Int) {
         var v = value.littleEndian
         Swift.withUnsafeBytes(of: &v) { valBuf in
-            self.replaceSubrange(offset..<(offset + 4), with: valBuf)
+            let idx = self.startIndex + offset
+            self.replaceSubrange(idx..<(idx + 4), with: valBuf)
         }
     }
 }
