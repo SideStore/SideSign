@@ -47,7 +47,7 @@ public struct Feature: RawRepresentable, Hashable, Codable, Sendable, Expressibl
         case .gameCenter:                      self = .gameCenter
         case .inAppPurchase:                   self = .inAppPurchase
         default:
-            self.init(rawValue: entitlement.rawValue)
+            return nil
         }
     }
 }
