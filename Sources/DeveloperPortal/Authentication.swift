@@ -168,13 +168,17 @@ public extension DeveloperPortal {
             throw ServerError.invalidResponseFormat(rawPayload: rawDecrypted)
         }
 
-        guard let dsid = (decryptedDictionary["adsid"] as? String) ?? (decryptedDictionary["dsid"] as? CustomStringConvertible)?.description else {
+        let adsid = decryptedDictionary["adsid"] as? String
+        let dsidString = (decryptedDictionary["dsid"] as? CustomStringConvertible)?.description
+        guard let dsid = adsid ?? dsidString else {
             let jsonStr = prettyJSONString(from: decryptedDictionary)
             debugLog("[SideSign] Decrypted dictionary missing adsid/dsid")
             throw ServerError.missingKey(key: "adsid", jsonPayload: jsonStr)
         }
 
-        guard let idmsToken = (decryptedDictionary["GsIdmsToken"] as? String) ?? (decryptedDictionary["idmsToken"] as? String) else {
+        let gsIdmsToken = decryptedDictionary["GsIdmsToken"] as? String
+        let rawIdmsToken = decryptedDictionary["idmsToken"] as? String
+        guard let idmsToken = gsIdmsToken ?? rawIdmsToken else {
             let jsonStr = prettyJSONString(from: decryptedDictionary)
             debugLog("[SideSign] Decrypted dictionary missing GsIdmsToken/idmsToken")
             throw ServerError.missingKey(key: "GsIdmsToken", jsonPayload: jsonStr)
@@ -182,8 +186,9 @@ public extension DeveloperPortal {
 
         verboseLog("[SideSign] Parse complete. dsid: \(dsid), token: \(idmsToken)")
 
-        let authType = ((completeResponseDictionary["Status"] as? [String: any Sendable])?["au"] as? String)
-            ?? (completeResponseDictionary["au"] as? String)
+        let statusDictionary = completeResponseDictionary["Status"] as? [String: any Sendable]
+        let authType = (statusDictionary?["au"] as? String)
+           ?? (completeResponseDictionary["au"] as? String)
         verboseLog("[SideSign] Authentication status type: \(authType ?? "nil")")
 
         switch authType {
@@ -192,8 +197,22 @@ public extension DeveloperPortal {
                 debugLog("[SideSign] Trusted device 2FA required but no verificationHandler provided")
                 throw DeveloperPortalError.requiresTwoFactorAuthentication
             }
-            try await requestTrustedDeviceTwoFactorCode(dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
-            return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, machinePassword: machinePassword, accountRepairHandler: accountRepairHandler, verificationHandler: verificationHandler)
+            try await requestTrustedDeviceTwoFactorCode(
+                dsid: dsid, 
+                idmsToken: idmsToken, 
+                anisetteData: anisetteData, 
+                xcodeVersion: xcodeVersion, 
+                verificationHandler: verificationHandler
+            )
+            return try await authenticate(
+                appleID: unsanitizedAppleID, 
+                password: password, 
+                anisetteData: anisetteData, 
+                xcodeVersion: xcodeVersion, 
+                machinePassword: machinePassword, 
+                accountRepairHandler: accountRepairHandler, 
+                verificationHandler: verificationHandler
+            )
 
         case _ where authType.flatMap(Constants.SecondaryAuthType.init) != nil:
             guard let verificationHandler else {
@@ -201,22 +220,43 @@ public extension DeveloperPortal {
                 throw DeveloperPortalError.requiresTwoFactorAuthentication
             }
             let secondaryType = authType.flatMap(Constants.SecondaryAuthType.init)
-            let requestedMode = (secondaryType == .voice) ? Constants.SecondaryAuthType.voice.rawValue : Constants.SecondaryAuthType.sms.rawValue
-            let phoneDict = (completeResponseDictionary["phoneNumber"] as? [String: any Sendable])
-                ?? ((completeResponseDictionary["phoneNumbers"] as? [[String: any Sendable]])?.first)
-                ?? ((completeResponseDictionary["trustedPhoneNumbers"] as? [[String: any Sendable]])?.first)
+            let requestedMode = (secondaryType == .voice) 
+                ? Constants.SecondaryAuthType.voice.rawValue 
+                : Constants.SecondaryAuthType.sms.rawValue
+
+            let singlePhoneDict = completeResponseDictionary["phoneNumber"] as? [String: any Sendable]
+            let phoneListFirst = (completeResponseDictionary["phoneNumbers"] as? [[String: any Sendable]])?.first
+            let trustedPhoneListFirst = (completeResponseDictionary["trustedPhoneNumbers"] as? [[String: any Sendable]])?.first
+            let phoneDict = singlePhoneDict ?? phoneListFirst ?? trustedPhoneListFirst
+
             let initialPhoneID = (phoneDict?["id"] as? CustomStringConvertible)?.description
-            try await requestSMSTwoFactorCode(mode: requestedMode, phoneID: initialPhoneID, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
-            return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, machinePassword: machinePassword, accountRepairHandler: accountRepairHandler, verificationHandler: verificationHandler)
+            try await requestSMSTwoFactorCode(
+                mode: requestedMode, 
+                phoneID: initialPhoneID, 
+                dsid: dsid, 
+                idmsToken: idmsToken, 
+                anisetteData: anisetteData, 
+                xcodeVersion: xcodeVersion, 
+                verificationHandler: verificationHandler
+            )
+            return try await authenticate(
+                appleID: unsanitizedAppleID, 
+                password: password, 
+                anisetteData: anisetteData, 
+                xcodeVersion: xcodeVersion, 
+                machinePassword: machinePassword, 
+                accountRepairHandler: accountRepairHandler, 
+                verificationHandler: verificationHandler
+            )
 
         case "repair":
-            let repairURLString = (completeResponseDictionary["repairUrl"] as? String)
-                ?? (completeResponseDictionary["url"] as? String)
-                ?? ((completeResponseDictionary["Status"] as? [String: any Sendable])?["url"] as? String)
+            let directRepairURL = completeResponseDictionary["repairUrl"] as? String
+            let directURL = completeResponseDictionary["url"] as? String
+            let statusURL = (statusDictionary?["url"] as? String)
+            let repairURLString = directRepairURL ?? directURL ?? statusURL
             let repairURL = repairURLString.flatMap { URL(string: $0) } ?? Constants.URLs.developerAccount
 
-            let statusDict = completeResponseDictionary["Status"] as? [String: any Sendable]
-            let rawMessage = (statusDict?["em"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let rawMessage = (statusDictionary?["em"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
 
             let message: String
             if let rawMessage, !rawMessage.isEmpty {
@@ -532,8 +572,9 @@ public extension DeveloperPortal {
                 let verifyDictionary = parsePlistOrJSON(verifyData)
                 let (xmluiTitle, xmluiMessage) = parseXMLUIAlertMessage(from: verifyData)
                 let errorCode = verifyDictionary?["ec"] as? Int ?? 0
+                let statusDict = verifyDictionary?["Status"] as? [String: any Sendable]
                 let errorMsg = (verifyDictionary?["em"] as? String)
-                    ?? ((verifyDictionary?["Status"] as? [String: any Sendable])?["em"] as? String)
+                    ?? (statusDict?["em"] as? String)
                     ?? xmluiMessage
                     ?? xmluiTitle
 
@@ -611,7 +652,7 @@ public extension DeveloperPortal {
         let responseDict = parsePlistOrJSON(data)
         let errorCode = responseDict?["ec"] as? Int ?? 0
         let errorMsg = (responseDict?["em"] as? String)
-            ?? ((responseDict?["Status"] as? [String: any Sendable])?["em"] as? String)
+                   ?? ((responseDict?["Status"] as? [String: any Sendable])?["em"] as? String)
 
         if errorCode == GrandSlamAuthErrorCodes.tooManyAttempts 
             || errorCode == GrandSlamAuthErrorCodes.tooManyCodesRequested 
@@ -637,16 +678,26 @@ public extension DeveloperPortal {
         if parsedNumbers.isEmpty {
             parsedNumbers = knownPhoneNumbers
         }
-        let phoneDict = (responseDict?["phoneNumber"] as? [String: any Sendable])
-            ?? ((responseDict?["phoneNumbers"] as? [[String: any Sendable]])?.first)
-            ?? ((responseDict?["trustedPhoneNumbers"] as? [[String: any Sendable]])?.first)
-        let phoneID = (phoneDict?["id"] as? CustomStringConvertible)?.description ?? requestedPhoneID ?? parsedNumbers.first?.id ?? "1"
+        let singlePhoneDict = responseDict?["phoneNumber"] as? [String: any Sendable]
+        let phoneListFirst = (responseDict?["phoneNumbers"] as? [[String: any Sendable]])?.first
+        let trustedPhoneListFirst = (responseDict?["trustedPhoneNumbers"] as? [[String: any Sendable]])?.first
+        let phoneDict = singlePhoneDict ?? phoneListFirst ?? trustedPhoneListFirst
+
+        let phoneIDFromDict = (phoneDict?["id"] as? CustomStringConvertible)?.description
+        let phoneID = phoneIDFromDict ?? requestedPhoneID ?? parsedNumbers.first?.id ?? "1"
         let activeMode = (phoneDict?["mode"] as? String) ?? requestedMode
-        let numberObfuscated = (phoneDict?["numberWithDialCode"] as? String) 
-            ?? (phoneDict?["obfuscatedNumber"] as? String) 
-            ?? (phoneDict?["lastTwoDigits"] as? String).map { "••\($0)" } 
-            ?? parseXMLUIObfuscatedNumber(from: data)
-            ?? parsedNumbers.first(where: { $0.id == phoneID })?.number
+
+        let numberWithDialCode = phoneDict?["numberWithDialCode"] as? String
+        let obfuscatedNumber = phoneDict?["obfuscatedNumber"] as? String
+        let lastTwoDigits = (phoneDict?["lastTwoDigits"] as? String).map { "••\($0)" }
+        let xmluiNumber = parseXMLUIObfuscatedNumber(from: data)
+        let matchedNumber = parsedNumbers.first(where: { $0.id == phoneID })?.number
+
+        let numberObfuscated = numberWithDialCode
+            ?? obfuscatedNumber
+            ?? lastTwoDigits
+            ?? xmluiNumber
+            ?? matchedNumber
             ?? ""
         if let idx = parsedNumbers.firstIndex(where: { $0.id == phoneID }), !numberObfuscated.isEmpty {
             parsedNumbers[idx] = TrustedPhoneNumber(id: phoneID, number: numberObfuscated)
@@ -705,8 +756,9 @@ public extension DeveloperPortal {
                 let verifyDict = parsePlistOrJSON(verifyData)
                 let (xmluiTitle, xmluiMessage) = parseXMLUIAlertMessage(from: verifyData)
                 let errorCode = verifyDict?["ec"] as? Int ?? 0
+                let statusDict = verifyDict?["Status"] as? [String: any Sendable]
                 let errorMsg = (verifyDict?["em"] as? String)
-                    ?? ((verifyDict?["Status"] as? [String: any Sendable])?["em"] as? String)
+                    ?? (statusDict?["em"] as? String)
                     ?? xmluiMessage
                     ?? xmluiTitle
 
