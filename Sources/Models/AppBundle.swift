@@ -29,6 +29,10 @@ public struct AppBundle: Sendable, Identifiable, Hashable, Equatable {
         return ProvisioningProfile(fileURL: url)
     }
 
+    public var profileEntitlements: [String: any Sendable]? {
+        provisioningProfile?.entitlements
+    }
+
     public var appExtensions: Set<AppBundle> {
         loadExtensions()
     }

@@ -92,10 +92,6 @@ public struct AppBundleSigner: CodeSignerAPI, Sendable {
                 throw SignerError.missingProvisioningProfile(bundleIdentifier: app.bundleIdentifier)
             }
 
-            let profileURL = app.fileURL.appendingPathComponent("embedded.mobileprovision")
-            verboseLog("[SideSign] Writing mobileprovision to: \(profileURL.path)")
-            try matchedProfile.data.write(to: profileURL)
-
             var filteredEntitlements = matchedProfile.entitlements
             verboseLog("[SideSign] Original profile entitlements: \(filteredEntitlements)")
 
@@ -141,6 +137,10 @@ public struct AppBundleSigner: CodeSignerAPI, Sendable {
 
             verboseLog("[SideSign] Prepared Entitlements XML for \(app.bundleIdentifier):\n\(string)")
             entitlementsByURL[app.fileURL.resolvingSymlinksInPath()] = string
+
+            let profileURL = app.fileURL.appendingPathComponent("embedded.mobileprovision")
+            verboseLog("[SideSign] Writing mobileprovision to: \(profileURL.path)")
+            try matchedProfile.data.write(to: profileURL)
         }
 
         do {

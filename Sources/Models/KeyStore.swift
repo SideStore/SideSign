@@ -51,7 +51,7 @@ public struct KeyStore: Sendable, Equatable, Hashable, Identifiable {
         do {
             result = try PKCS12Parser.extract(p12Data, password: password)
         } catch {
-            throw ALTCertificateError.decryptionFailed(cause: error.localizedDescription)
+            throw CertificateError.decryptionFailed(cause: error.localizedDescription)
         }
             
         guard let x509 = X509Certificate(data: result.cert) else {
