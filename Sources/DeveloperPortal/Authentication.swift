@@ -16,6 +16,7 @@ public extension DeveloperPortal {
                       anisetteData: AnisetteData,
                       xcodeVersion: String,
                       machinePassword: String? = nil,
+                      accountRepairHandler: DeveloperPortal.AccountRepairHandler = DeveloperPortal.defaultAccountRepairHandler,
                       verificationHandler: DeveloperPortal.VerificationHandler? = nil) async throws -> AuthSession
     {
         let sanitizedAppleID = unsanitizedAppleID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -192,7 +193,7 @@ public extension DeveloperPortal {
                 throw DeveloperPortalError.requiresTwoFactorAuthentication
             }
             try await requestTrustedDeviceTwoFactorCode(dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
-            return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, machinePassword: machinePassword, verificationHandler: verificationHandler)
+            return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, machinePassword: machinePassword, accountRepairHandler: accountRepairHandler, verificationHandler: verificationHandler)
 
         case _ where authType.flatMap(Constants.SecondaryAuthType.init) != nil:
             guard let verificationHandler else {
@@ -206,7 +207,7 @@ public extension DeveloperPortal {
                 ?? ((completeResponseDictionary["trustedPhoneNumbers"] as? [[String: any Sendable]])?.first)
             let initialPhoneID = (phoneDict?["id"] as? CustomStringConvertible)?.description
             try await requestSMSTwoFactorCode(mode: requestedMode, phoneID: initialPhoneID, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
-            return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, machinePassword: machinePassword, verificationHandler: verificationHandler)
+            return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, xcodeVersion: xcodeVersion, machinePassword: machinePassword, accountRepairHandler: accountRepairHandler, verificationHandler: verificationHandler)
 
         case "repair":
             let repairURLString = (completeResponseDictionary["repairUrl"] as? String)
@@ -224,50 +225,63 @@ public extension DeveloperPortal {
                 message = Constants.defaultAccountRepairMessage
             }
 
-            debugLog("[SideSign] Account repair required: \(message) (url: \(repairURL.absoluteString))")
-            throw DeveloperPortalError.accountRepairRequired(url: repairURL, message: message)
+            debugLog("[SideSign] Account repair required: \(message) (url: \(repairURL.absoluteString)). Prompting accountRepairHandler...")
+            let decision: AccountRepairDecision = try await withCheckedThrowingContinuation { continuation in
+                accountRepairHandler(repairURL, message) { decision in
+                    continuation.resume(returning: decision)
+                }
+            }
+
+            if decision == .cancel {
+                debugLog("[SideSign] Account repair cancelled by caller.")
+                throw DeveloperPortalError.accountRepairRequired(url: repairURL, message: message)
+            }
+
+            debugLog("[SideSign] Account repair acknowledged by caller. Continuing to fetch app tokens...")
 
         default:
-            guard let sessionKey = decryptedDictionary["sk"] as? Data else {
-                debugLog("[SideSign] Decrypted dictionary missing 'sk' key for apptokens")
-                throw ServerError.missingKey(key: "sk", jsonPayload: prettyJSONString(from: decryptedDictionary))
-            }
-
-            guard let c = decryptedDictionary["c"] as? Data else {
-                debugLog("[SideSign] Decrypted dictionary missing 'c' key for apptokens")
-                throw ServerError.missingKey(key: "c", jsonPayload: prettyJSONString(from: decryptedDictionary))
-            }
-
-            let app = Constants.authApp
-            guard let checksum = CryptoUtilities.hmacSHA256(key: sessionKey, strings: ["apptokens", dsid, app]) else {
-                debugLog("[SideSign] Failed to compute apptokens checksum")
-                throw DeveloperPortalError.authenticationHandshakeFailed(cause: "Failed to compute apptokens checksum")
-            }
-
-            let appTokensParameters: [String: any Sendable] = [
-                "app": [app],
-                "c": c,
-                "checksum": checksum,
-                "cpd": clientDictionary,
-                "o": "apptokens",
-                "t": idmsToken,
-                "u": dsid
-            ]
-
-            let fetchedToken = try await fetchAuthToken(app: app, parameters: appTokensParameters, sessionKey: sessionKey, anisetteData: anisetteData)
-            let session = Session(
-                dsid: dsid,
-                authToken: fetchedToken.token,
-                anisetteData: anisetteData,
-                xcodeVersion: xcodeVersion,
-                machinePassword: machinePassword,
-                creationDate: fetchedToken.creationDate,
-                expirationDate: fetchedToken.expirationDate,
-                timeToLive: fetchedToken.timeToLive
-            )
-            let account = try await fetchAccount(session: session)
-            return AuthSession(account: account, session: session)
+            break
         }
+
+        guard let sessionKey = decryptedDictionary["sk"] as? Data else {
+            debugLog("[SideSign] Decrypted dictionary missing 'sk' key for apptokens")
+            throw ServerError.missingKey(key: "sk", jsonPayload: prettyJSONString(from: decryptedDictionary))
+        }
+
+        guard let c = decryptedDictionary["c"] as? Data else {
+            debugLog("[SideSign] Decrypted dictionary missing 'c' key for apptokens")
+            throw ServerError.missingKey(key: "c", jsonPayload: prettyJSONString(from: decryptedDictionary))
+        }
+
+        let app = Constants.authApp
+        guard let checksum = CryptoUtilities.hmacSHA256(key: sessionKey, strings: ["apptokens", dsid, app]) else {
+            debugLog("[SideSign] Failed to compute apptokens checksum")
+            throw DeveloperPortalError.authenticationHandshakeFailed(cause: "Failed to compute apptokens checksum")
+        }
+
+        let appTokensParameters: [String: any Sendable] = [
+            "app": [app],
+            "c": c,
+            "checksum": checksum,
+            "cpd": clientDictionary,
+            "o": "apptokens",
+            "t": idmsToken,
+            "u": dsid
+        ]
+
+        let fetchedToken = try await fetchAuthToken(app: app, parameters: appTokensParameters, sessionKey: sessionKey, anisetteData: anisetteData)
+        let session = Session(
+            dsid: dsid,
+            authToken: fetchedToken.token,
+            anisetteData: anisetteData,
+            xcodeVersion: xcodeVersion,
+            machinePassword: machinePassword,
+            creationDate: fetchedToken.creationDate,
+            expirationDate: fetchedToken.expirationDate,
+            timeToLive: fetchedToken.timeToLive
+        )
+        let account = try await fetchAccount(session: session)
+        return AuthSession(account: account, session: session)
     }
 
     func sendAuthenticationRequest(parameters requestParameters: [String: any Sendable], anisetteData: AnisetteData) async throws -> [String: any Sendable] {
