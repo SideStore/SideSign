@@ -20,20 +20,58 @@ public struct TrustedPhoneNumber: Sendable, Hashable, Identifiable, Codable {
 }
 
 public enum TwoFactorDeliveryMode: String, Sendable {
+    case trustedDevice
     case sms
     case voice
 }
 
-public enum TwoFactorMode: Sendable, Equatable {
+public enum TwoFactorRequest: Sendable, Equatable {
     case trustedDevice(error: String? = nil)
     case sms(phoneNumbers: [TrustedPhoneNumber], activeID: String, error: String? = nil)
     case voice(phoneNumbers: [TrustedPhoneNumber], activeID: String, error: String? = nil)
+
+    public var mode: TwoFactorDeliveryMode {
+        switch self {
+        case .trustedDevice:
+            return .trustedDevice
+        case .sms:
+            return .sms
+        case .voice:
+            return .voice
+        }
+    }
+
+    public var error: String? {
+        switch self {
+        case .trustedDevice(let error):
+            return error
+        case .sms(_, _, let error):
+            return error
+        case .voice(_, _, let error):
+            return error
+        }
+    }
 }
 
-public enum TwoFactorAction: Sendable {
-    case code(String)
-    case requestPhone(id: String, mode: TwoFactorDeliveryMode)
+public enum TwoFactorResponse: Sendable {
+    case verificationCode(String)
+    case requestTrustedDevice
+    case requestSMS(phoneID: String)
+    case requestVoice(phoneID: String)
     case cancel
+
+    public var deliveryMode: TwoFactorDeliveryMode? {
+        switch self {
+        case .requestTrustedDevice:
+            return .trustedDevice
+        case .requestSMS:
+            return .sms
+        case .requestVoice:
+            return .voice
+        case .verificationCode, .cancel:
+            return nil
+        }
+    }
 }
 
 public enum AccountRepairDecision: Sendable {
@@ -42,7 +80,7 @@ public enum AccountRepairDecision: Sendable {
 }
 
 public extension DeveloperPortal {
-    typealias VerificationHandler = @Sendable (TwoFactorMode) async throws -> TwoFactorAction
+    typealias VerificationHandler = @Sendable (TwoFactorRequest) async throws -> TwoFactorResponse
     typealias AccountRepairHandler = @Sendable (URL, String) async throws -> AccountRepairDecision
 
     static let defaultAccountRepairHandler: AccountRepairHandler = { _, _ in
