@@ -42,11 +42,11 @@ public enum AccountRepairDecision: Sendable {
 }
 
 public extension DeveloperPortal {
-    typealias VerificationHandler = @Sendable (TwoFactorMode, @escaping @Sendable (TwoFactorAction) -> Void) -> Void
-    typealias AccountRepairHandler = @Sendable (URL, String, @escaping @Sendable (AccountRepairDecision) -> Void) -> Void
+    typealias VerificationHandler = @Sendable (TwoFactorMode) async throws -> TwoFactorAction
+    typealias AccountRepairHandler = @Sendable (URL, String) async throws -> AccountRepairDecision
 
-    static let defaultAccountRepairHandler: AccountRepairHandler = { _, _, completion in
-        completion(.proceed)
+    static let defaultAccountRepairHandler: AccountRepairHandler = { _, _ in
+        .proceed
     }
 }
 

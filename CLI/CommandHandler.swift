@@ -1368,70 +1368,64 @@ public enum CommandHandler {
         return (anisetteData, newAdiPb, targetDataURL, devPass)
     }
 
-    private static func handleCLI2FA(mode: TwoFactorMode, completion: @escaping (TwoFactorAction) -> Void) {
+    private static func handleCLI2FA(mode: TwoFactorMode) async throws -> TwoFactorAction {
         switch mode {
         case .trustedDevice(let error):
             if let error = error {
                 print("\n[2FA] Verification Error: \(error)")
                 if let input = readInteractiveLine(prompt: "Press [Enter] to retry code entry, or 'c' to cancel: "), input.lowercased() == "c" {
-                    completion(TwoFactorAction.cancel)
-                    return
+                    return TwoFactorAction.cancel
                 }
             }
             guard let code = readInteractiveLine(prompt: "Enter 6-digit verification code from your Apple device (or 'p' for phone call/SMS, 'c' to cancel): "), !code.isEmpty else {
-                completion(TwoFactorAction.cancel)
-                return
+                return TwoFactorAction.cancel
             }
             if code.lowercased() == "c" {
-                completion(TwoFactorAction.cancel)
+                return TwoFactorAction.cancel
             } else if code.lowercased() == "p" {
-                completion(TwoFactorAction.requestPhone(id: "1", mode: TwoFactorDeliveryMode.sms))
+                return TwoFactorAction.requestPhone(id: "1", mode: TwoFactorDeliveryMode.sms)
             } else {
-                completion(TwoFactorAction.code(code))
+                return TwoFactorAction.code(code)
             }
 
         case .sms(let phoneNumbers, let activeID, let error):
             if let error = error {
                 print("\n[SMS] Verification Error: \(error)")
                 if let input = readInteractiveLine(prompt: "Press [Enter] to retry code entry, or 'c' to cancel: "), input.lowercased() == "c" {
-                    completion(TwoFactorAction.cancel)
-                    return
+                    return TwoFactorAction.cancel
                 }
             }
             let activePhone = phoneNumbers.first(where: { $0.id == activeID })?.number ?? "phone"
             guard let code = readInteractiveLine(prompt: "Enter 6-digit code sent via SMS to \(activePhone) (or 'v' for voice call, 'r' to resend, 'c' to cancel): "), !code.isEmpty else {
-                completion(TwoFactorAction.cancel)
-                return
+                return TwoFactorAction.cancel
             }
             if code.lowercased() == "c" {
-                completion(TwoFactorAction.cancel)
+                return TwoFactorAction.cancel
             } else if code.lowercased() == "v" {
-                completion(TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.voice))
+                return TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.voice)
             } else if code.lowercased() == "r" {
-                completion(TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.sms))
+                return TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.sms)
             } else {
-                completion(TwoFactorAction.code(code))
+                return TwoFactorAction.code(code)
             }
 
         case .voice(let phoneNumbers, let activeID, let error):
             if let error = error {
                 print("\n[Voice] Verification Error: \(error)")
                 if let input = readInteractiveLine(prompt: "Press [Enter] to retry code entry, or 'c' to cancel: "), input.lowercased() == "c" {
-                    completion(TwoFactorAction.cancel)
-                    return
+                    return TwoFactorAction.cancel
                 }
             }
             let activePhone = phoneNumbers.first(where: { $0.id == activeID })?.number ?? "phone"
             guard let code = readInteractiveLine(prompt: "Enter 6-digit code from voice call to \(activePhone) (or 'r' to resend, 'c' to cancel): "), !code.isEmpty else {
-                completion(TwoFactorAction.cancel)
-                return
+                return TwoFactorAction.cancel
             }
             if code.lowercased() == "c" {
-                completion(TwoFactorAction.cancel)
+                return TwoFactorAction.cancel
             } else if code.lowercased() == "r" {
-                completion(TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.voice))
+                return TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.voice)
             } else {
-                completion(TwoFactorAction.code(code))
+                return TwoFactorAction.code(code)
             }
         }
     }

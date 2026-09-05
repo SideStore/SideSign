@@ -226,11 +226,7 @@ public extension DeveloperPortal {
             }
 
             debugLog("[SideSign] Account repair required: \(message) (url: \(repairURL.absoluteString)). Prompting accountRepairHandler...")
-            let decision: AccountRepairDecision = try await withCheckedThrowingContinuation { continuation in
-                accountRepairHandler(repairURL, message) { decision in
-                    continuation.resume(returning: decision)
-                }
-            }
+            let decision = try await accountRepairHandler(repairURL, message)
 
             if decision == .cancel {
                 debugLog("[SideSign] Account repair cancelled by caller.")
@@ -521,11 +517,7 @@ public extension DeveloperPortal {
         var lastError: String? = nil
         while true {
             debugLog("[SideSign] Prompting user for trusted device 2FA code (error: \(lastError ?? "nil"))...")
-            let action: TwoFactorAction = try await withCheckedThrowingContinuation { continuation in
-                verificationHandler(.trustedDevice(error: lastError)) { action in
-                    continuation.resume(returning: action)
-                }
-            }
+            let action = try await verificationHandler(.trustedDevice(error: lastError))
 
             switch action {
             case .code(let code):
@@ -694,11 +686,7 @@ public extension DeveloperPortal {
                 : .sms(phoneNumbers: phoneNumbers, activeID: phoneID, error: lastError)
 
             debugLog("[SideSign] Prompting user for 2FA code via verificationHandler (request status: \(statusCode), phoneId: \(phoneID), mode: \(activeMode), phoneCount: \(phoneNumbers.count), error: \(lastError ?? "nil"))...")
-            let action: TwoFactorAction = try await withCheckedThrowingContinuation { continuation in
-                verificationHandler(twoFactorMode) { action in
-                    continuation.resume(returning: action)
-                }
-            }
+            let action = try await verificationHandler(twoFactorMode)
 
             switch action {
             case .code(let code):
