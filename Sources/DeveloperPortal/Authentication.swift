@@ -213,8 +213,17 @@ public extension DeveloperPortal {
                 ?? (completeResponseDictionary["url"] as? String)
                 ?? ((completeResponseDictionary["Status"] as? [String: any Sendable])?["url"] as? String)
             let repairURL = repairURLString.flatMap { URL(string: $0) } ?? Constants.URLs.developerAccount
-            let message = ((completeResponseDictionary["Status"] as? [String: any Sendable])?["em"] as? String)
-                ?? Constants.defaultAccountRepairMessage
+
+            let statusDict = completeResponseDictionary["Status"] as? [String: any Sendable]
+            let rawMessage = (statusDict?["em"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            let message: String
+            if let rawMessage, !rawMessage.isEmpty {
+                message = rawMessage
+            } else {
+                message = Constants.defaultAccountRepairMessage
+            }
+
             debugLog("[SideSign] Account repair required: \(message) (url: \(repairURL.absoluteString))")
             throw DeveloperPortalError.accountRepairRequired(url: repairURL, message: message)
 
