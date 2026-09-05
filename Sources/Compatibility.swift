@@ -38,10 +38,6 @@ public typealias ALTError                   = SignerError
 public typealias ALTServerError             = ServerError
 public typealias ALTCertificateError        = CertificateError
 public typealias CertificatesManager        = CertificateParser
-public typealias ALTTrustedPhoneNumber      = TrustedPhoneNumber
-public typealias ALTTwoFactorDeliveryMode   = TwoFactorDeliveryMode
-public typealias ALTTwoFactorMode           = TwoFactorMode
-public typealias ALTTwoFactorAction         = TwoFactorAction
 
 public let AltSignErrorDomain               = "com.altstore.AltSign"
 public let ALTAppleAPIErrorDomain           = "com.altstore.AltSign.AppleAPI"
