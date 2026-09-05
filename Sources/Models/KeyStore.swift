@@ -47,8 +47,13 @@ public struct KeyStore: Sendable, Equatable, Hashable, Identifiable {
     }
 
     public init(p12Data: Data, password: String? = nil) throws {
-        let result = try PKCS12Parser.extract(p12Data, password: password)
-
+        let result: (cert: Data, key: Data)
+        do {
+            result = try PKCS12Parser.extract(p12Data, password: password)
+        } catch {
+            throw ALTCertificateError.decryptionFailed(cause: error.localizedDescription)
+        }
+            
         guard let x509 = X509Certificate(data: result.cert) else {
             debugLog("[SideSign] KeyStore error: Failed to parse certificate from PKCS#12 payload")
             throw CertificateError.invalidData(cause: "Failed to parse certificate from PKCS#12 payload")

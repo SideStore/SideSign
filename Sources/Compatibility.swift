@@ -154,7 +154,7 @@ public extension AppGroup {
 
 public extension Data {
     var isPKCS12: Bool {
-        (try? KeyStore(p12Data: self, password: "")) != nil
+        ASN1Helper.parseTLV(from: self)?.tag == 0x30
     }
 }
 

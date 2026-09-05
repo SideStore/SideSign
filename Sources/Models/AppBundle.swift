@@ -161,12 +161,6 @@ public struct AppBundle: Sendable, Identifiable, Hashable, Equatable {
     }
 
     private func loadEntitlements() -> [String: any Sendable] {
-        let profileURL = fileURL.appendingPathComponent("embedded.mobileprovision")
-        if let profileData = try? Data(contentsOf: profileURL),
-           let profile = ProvisioningProfile(data: profileData) {
-            return profile.entitlements
-        }
-
         if !entitlementsString.isEmpty,
            let data = entitlementsString.data(using: .utf8),
            let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: any Sendable] {
