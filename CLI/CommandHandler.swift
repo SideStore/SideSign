@@ -1370,21 +1370,22 @@ public enum CommandHandler {
 
     private static func handleCLI2FA(request: TwoFactorRequest) async throws -> TwoFactorResponse {
         switch request {
-        case .selectDeliveryMethod(let availableModes, let phoneNumbers):
+        case .selectDeliveryMethod(let preferredMode, let phoneNumbers):
             print("\nTwo-Factor Authentication Required. Select a verification method:")
             var options: [(title: String, response: TwoFactorResponse)] = []
-            for mode in availableModes {
+            for mode in TwoFactorDeliveryMode.allCases {
+                let tag = (mode == preferredMode) ? " (Default)" : ""
                 switch mode {
                     case .trustedDevice:
-                        options.append(("Apple Devices", .requestTrustedDevice))
+                        options.append(("Apple Devices\(tag)", .requestTrustedDevice))
                     case .sms:
                         let targetID = phoneNumbers.first?.id ?? "1"
                         let phoneStr = (phoneNumbers.first?.number.isEmpty == false) ? " (\(phoneNumbers.first!.number))" : ""
-                        options.append(("Text Message (SMS)\(phoneStr)", .requestSMS(phoneID: targetID)))
+                        options.append(("Text Message (SMS)\(phoneStr)\(tag)", .requestSMS(phoneID: targetID)))
                     case .voice:
                         let targetID = phoneNumbers.first?.id ?? "1"
                         let phoneStr = (phoneNumbers.first?.number.isEmpty == false) ? " (\(phoneNumbers.first!.number))" : ""
-                        options.append(("Phone Call\(phoneStr)", .requestVoice(phoneID: targetID)))
+                        options.append(("Phone Call\(phoneStr)\(tag)", .requestVoice(phoneID: targetID)))
                 }
             }
             for (idx, opt) in options.enumerated() {

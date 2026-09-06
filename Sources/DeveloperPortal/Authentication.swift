@@ -544,15 +544,12 @@ public extension DeveloperPortal {
             phoneNumbers = parseTrustedPhoneNumbers(from: statusDictionary)
         }
 
-        var availableModes: [TwoFactorDeliveryMode] = []
-        if isTrustedDevice {
-            availableModes.append(.trustedDevice)
-        }
-        if !phoneNumbers.isEmpty || !isTrustedDevice {
-            availableModes.append(contentsOf: [.sms, .voice])
-        }
+        let preferredMode: TwoFactorDeliveryMode = isTrustedDevice ? .trustedDevice : .sms
 
-        var currentRequest: TwoFactorRequest = .selectDeliveryMethod(availableModes: availableModes, phoneNumbers: phoneNumbers)
+        var currentRequest: TwoFactorRequest = .selectDeliveryMethod(
+            preferredMode: preferredMode,
+            phoneNumbers: phoneNumbers
+        )
         var activeChannel: TwoFactorAuthChannel? = nil
 
         while true {
