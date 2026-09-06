@@ -26,12 +26,15 @@ public enum TwoFactorDeliveryMode: String, Sendable {
 }
 
 public enum TwoFactorRequest: Sendable, Equatable {
+    case selectDeliveryMethod(availableModes: [TwoFactorDeliveryMode], phoneNumbers: [TrustedPhoneNumber])
     case trustedDevice(error: String? = nil)
     case sms(phoneNumbers: [TrustedPhoneNumber], activeID: String, error: String? = nil)
     case voice(phoneNumbers: [TrustedPhoneNumber], activeID: String, error: String? = nil)
 
-    public var mode: TwoFactorDeliveryMode {
+    public var mode: TwoFactorDeliveryMode? {
         switch self {
+        case .selectDeliveryMethod:
+            return nil
         case .trustedDevice:
             return .trustedDevice
         case .sms:
@@ -43,6 +46,8 @@ public enum TwoFactorRequest: Sendable, Equatable {
 
     public var error: String? {
         switch self {
+        case .selectDeliveryMethod:
+            return nil
         case .trustedDevice(let error):
             return error
         case .sms(_, _, let error):
