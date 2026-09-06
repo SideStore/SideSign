@@ -451,7 +451,7 @@ public extension DeveloperPortal {
                 ?? (dict?["phoneNumbers"] as? [[String: any Sendable]])
                 ?? []
         for item in list {
-            if let id = (item["id"] as? CustomStringConvertible)?.description {
+            if let id = (item["id"] as? CustomStringConvertible)?.description.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty {
                 let num = (item["numberWithDialCode"] as? String)
                         ?? (item["obfuscatedNumber"] as? String)
                         ?? (item["lastTwoDigits"] as? String).map { "••\($0)" }
@@ -460,7 +460,7 @@ public extension DeveloperPortal {
             }
         }
         if results.isEmpty, let single = dict?["phoneNumber"] as? [String: any Sendable],
-           let id = (single["id"] as? CustomStringConvertible)?.description {
+           let id = (single["id"] as? CustomStringConvertible)?.description.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty {
             let num = (single["numberWithDialCode"] as? String)
                     ?? (single["obfuscatedNumber"] as? String)
                     ?? (single["lastTwoDigits"] as? String).map { "••\($0)" }
@@ -623,9 +623,19 @@ public extension DeveloperPortal {
         let (data, response) = try await session.data(for: request)
         let httpResponse = response as? HTTPURLResponse
         let statusCode = httpResponse?.safeStatusCode ?? 0
+        let rawStr = prettyJSONString(from: data)
+
+        let (xmluiTitle, xmluiMessage) = parseXMLUIAlertMessage(from: data)
+        if xmluiTitle != nil || xmluiMessage != nil {
+            let alertMsg = [xmluiTitle, xmluiMessage]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: ": ")
+            debugLog("[SideSign] sendTrustedDevice2FACodeRequest alert from Apple (HTTP \(statusCode)): \(alertMsg)")
+            throw ServerError.badServerResponse(reason: alertMsg, jsonPayload: rawStr)
+        }
 
         guard statusCode == HTTPStatusCodes.ok else {
-            let rawStr = prettyJSONString(from: data)
             debugLog("[SideSign] sendTrustedDevice2FACodeRequest failed (HTTP \(statusCode)): \(rawStr)")
             throw ServerError.badServerResponse(reason: "Trusted device request failed (HTTP \(statusCode))", jsonPayload: rawStr)
         }
@@ -639,9 +649,16 @@ public extension DeveloperPortal {
         debugLog("[SideSign] Requesting secondary/phone 2FA code (mode: \(requestedMode), phoneID: \(requestedPhoneID ?? "auto"))...")
         verboseLog("[SideSign] sendPhone2FACodeRequest for dsid: \(context.dsid), requestedMode: \(requestedMode), phoneID: \(requestedPhoneID ?? "nil")")
 
+        let sanitizedPhoneID: String = {
+            if let id = requestedPhoneID?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty {
+                return id
+            }
+            return "1"
+        }()
+
         let serverInfo: [String: any Sendable] = [
             "mode": requestedMode,
-            "phoneNumber.id": requestedPhoneID ?? "1"
+            "phoneNumber.id": sanitizedPhoneID
         ]
 
         var request = makeTwoFactorAuthRequest(url: Constants.URLs.phonePutURL(mode: requestedMode), context: context)
@@ -658,9 +675,12 @@ public extension DeveloperPortal {
         verboseLog("[SideSign] sendPhone2FACodeRequest raw response (HTTP \(statusCode)): \(rawStr)")
 
         let responseDict = parsePlistOrJSON(data)
+        let (xmluiTitle, xmluiMessage) = parseXMLUIAlertMessage(from: data)
         let errorCode = responseDict?["ec"] as? Int ?? 0
         let errorMsg = (responseDict?["em"] as? String)
                    ?? ((responseDict?["Status"] as? [String: any Sendable])?["em"] as? String)
+                   ?? xmluiMessage
+                   ?? xmluiTitle
 
         if errorCode == GrandSlamAuthErrorCodes.tooManyAttempts 
             || errorCode == GrandSlamAuthErrorCodes.tooManyCodesRequested 
@@ -674,6 +694,15 @@ public extension DeveloperPortal {
             let msg = errorMsg ?? "Failed to request verification code from Apple."
             debugLog("[SideSign] sendPhone2FACodeRequest error (\(errorCode), HTTP \(statusCode)): \(msg)")
             throw ServerError.underlyingError(code: errorCode, message: msg)
+        }
+
+        if xmluiTitle != nil || xmluiMessage != nil {
+            let alertMsg = [xmluiTitle, xmluiMessage]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: ": ")
+            debugLog("[SideSign] sendPhone2FACodeRequest alert from Apple (HTTP \(statusCode)): \(alertMsg)")
+            throw ServerError.badServerResponse(reason: alertMsg, jsonPayload: rawStr)
         }
 
         guard statusCode == HTTPStatusCodes.ok else {
@@ -691,8 +720,11 @@ public extension DeveloperPortal {
         let trustedPhoneListFirst = (responseDict?["trustedPhoneNumbers"] as? [[String: any Sendable]])?.first
         let phoneDict = singlePhoneDict ?? phoneListFirst ?? trustedPhoneListFirst
 
-        let phoneIDFromDict = (phoneDict?["id"] as? CustomStringConvertible)?.description
-        let phoneID = phoneIDFromDict ?? requestedPhoneID ?? parsedNumbers.first?.id ?? "1"
+        let rawPhoneID = (phoneDict?["id"] as? CustomStringConvertible)?.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedPhoneID: String? = (rawPhoneID?.isEmpty == false) ? rawPhoneID : nil
+        let resolvedRequestedID: String? = (requestedPhoneID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false) ? requestedPhoneID : nil
+
+        let phoneID = resolvedPhoneID ?? resolvedRequestedID ?? parsedNumbers.first?.id ?? "1"
         let activeMode = (phoneDict?["mode"] as? String) ?? requestedMode
 
         let numberWithDialCode = phoneDict?["numberWithDialCode"] as? String
@@ -709,8 +741,8 @@ public extension DeveloperPortal {
                             ?? ""
         if let idx = parsedNumbers.firstIndex(where: { $0.id == phoneID }), !numberObfuscated.isEmpty {
             parsedNumbers[idx] = TrustedPhoneNumber(id: phoneID, number: numberObfuscated)
-        } else if parsedNumbers.isEmpty {
-            parsedNumbers = [TrustedPhoneNumber(id: phoneID, number: numberObfuscated.isEmpty ? "Phone \(phoneID)" : numberObfuscated)]
+        } else if parsedNumbers.isEmpty && !numberObfuscated.isEmpty {
+            parsedNumbers = [TrustedPhoneNumber(id: phoneID, number: numberObfuscated)]
         }
         debugLog("[SideSign] sendPhone2FACodeRequest received phone response (id: \(phoneID), mode: \(activeMode), number: \(numberObfuscated), total phones: \(parsedNumbers.count))")
 
