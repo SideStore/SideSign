@@ -1370,6 +1370,39 @@ public enum CommandHandler {
 
     private static func handleCLI2FA(request: TwoFactorRequest) async throws -> TwoFactorResponse {
         switch request {
+        case .selectDeliveryMethod(let availableModes, let phoneNumbers):
+            print("\nTwo-Factor Authentication Required. Select a verification method:")
+            var options: [(title: String, response: TwoFactorResponse)] = []
+            for mode in availableModes {
+                switch mode {
+                    case .trustedDevice:
+                        options.append(("Apple Devices", .requestTrustedDevice))
+                    case .sms:
+                        let targetID = phoneNumbers.first?.id ?? "1"
+                        let phoneStr = (phoneNumbers.first?.number.isEmpty == false) ? " (\(phoneNumbers.first!.number))" : ""
+                        options.append(("Text Message (SMS)\(phoneStr)", .requestSMS(phoneID: targetID)))
+                    case .voice:
+                        let targetID = phoneNumbers.first?.id ?? "1"
+                        let phoneStr = (phoneNumbers.first?.number.isEmpty == false) ? " (\(phoneNumbers.first!.number))" : ""
+                        options.append(("Phone Call\(phoneStr)", .requestVoice(phoneID: targetID)))
+                }
+            }
+            for (idx, opt) in options.enumerated() {
+                print("  [\(idx + 1)] \(opt.title)")
+            }
+            print("  [c] Cancel")
+            guard let input = readInteractiveLine(prompt: "Select option [1-\(options.count)]: "), !input.isEmpty else {
+                return .cancel
+            }
+            if input.lowercased() == "c" {
+                return .cancel
+            }
+            if let idx = Int(input), idx >= 1, idx <= options.count {
+                return options[idx - 1].response
+            }
+            print("Invalid selection, cancelling.")
+            return .cancel
+
         case .trustedDevice(let error):
             if let error = error {
                 print("\n[2FA] Verification Error: \(error)")
