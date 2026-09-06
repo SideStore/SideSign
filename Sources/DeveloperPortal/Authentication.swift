@@ -483,6 +483,19 @@ public extension DeveloperPortal {
         return (title, message)
     }
 
+    private func throwIfXMLUIErrorAlert(in data: Data, statusCode: Int, actionName: String) throws {
+        let (xmluiTitle, xmluiMessage) = parseXMLUIAlertMessage(from: data)
+        if xmluiTitle != nil || xmluiMessage != nil {
+            let alertMsg = [xmluiTitle, xmluiMessage]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: ": ")
+            let rawStr = prettyJSONString(from: data)
+            debugLog("[SideSign] \(actionName) alert from Apple (HTTP \(statusCode)): \(alertMsg)")
+            throw ServerError.badServerResponse(reason: alertMsg, jsonPayload: rawStr)
+        }
+    }
+
     private func parseXMLUIObfuscatedNumber(from data: Data) -> String? {
         guard let str = String(data: data, encoding: .utf8) else { return nil }
         let patterns = [
@@ -623,19 +636,10 @@ public extension DeveloperPortal {
         let (data, response) = try await session.data(for: request)
         let httpResponse = response as? HTTPURLResponse
         let statusCode = httpResponse?.safeStatusCode ?? 0
-        let rawStr = prettyJSONString(from: data)
-
-        let (xmluiTitle, xmluiMessage) = parseXMLUIAlertMessage(from: data)
-        if xmluiTitle != nil || xmluiMessage != nil {
-            let alertMsg = [xmluiTitle, xmluiMessage]
-                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-                .joined(separator: ": ")
-            debugLog("[SideSign] sendTrustedDevice2FACodeRequest alert from Apple (HTTP \(statusCode)): \(alertMsg)")
-            throw ServerError.badServerResponse(reason: alertMsg, jsonPayload: rawStr)
-        }
+        try throwIfXMLUIErrorAlert(in: data, statusCode: statusCode, actionName: "sendTrustedDevice2FACodeRequest")
 
         guard statusCode == HTTPStatusCodes.ok else {
+            let rawStr = prettyJSONString(from: data)
             debugLog("[SideSign] sendTrustedDevice2FACodeRequest failed (HTTP \(statusCode)): \(rawStr)")
             throw ServerError.badServerResponse(reason: "Trusted device request failed (HTTP \(statusCode))", jsonPayload: rawStr)
         }
@@ -674,13 +678,12 @@ public extension DeveloperPortal {
         let rawStr = prettyJSONString(from: data)
         verboseLog("[SideSign] sendPhone2FACodeRequest raw response (HTTP \(statusCode)): \(rawStr)")
 
+        try throwIfXMLUIErrorAlert(in: data, statusCode: statusCode, actionName: "sendPhone2FACodeRequest")
+
         let responseDict = parsePlistOrJSON(data)
-        let (xmluiTitle, xmluiMessage) = parseXMLUIAlertMessage(from: data)
         let errorCode = responseDict?["ec"] as? Int ?? 0
         let errorMsg = (responseDict?["em"] as? String)
                    ?? ((responseDict?["Status"] as? [String: any Sendable])?["em"] as? String)
-                   ?? xmluiMessage
-                   ?? xmluiTitle
 
         if errorCode == GrandSlamAuthErrorCodes.tooManyAttempts 
             || errorCode == GrandSlamAuthErrorCodes.tooManyCodesRequested 
@@ -694,15 +697,6 @@ public extension DeveloperPortal {
             let msg = errorMsg ?? "Failed to request verification code from Apple."
             debugLog("[SideSign] sendPhone2FACodeRequest error (\(errorCode), HTTP \(statusCode)): \(msg)")
             throw ServerError.underlyingError(code: errorCode, message: msg)
-        }
-
-        if xmluiTitle != nil || xmluiMessage != nil {
-            let alertMsg = [xmluiTitle, xmluiMessage]
-                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-                .joined(separator: ": ")
-            debugLog("[SideSign] sendPhone2FACodeRequest alert from Apple (HTTP \(statusCode)): \(alertMsg)")
-            throw ServerError.badServerResponse(reason: alertMsg, jsonPayload: rawStr)
         }
 
         guard statusCode == HTTPStatusCodes.ok else {
