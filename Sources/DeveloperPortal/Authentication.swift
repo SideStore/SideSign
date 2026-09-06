@@ -560,7 +560,7 @@ public extension DeveloperPortal {
             let action = try await verificationHandler(.trustedDevice(error: lastError))
 
             switch action {
-            case .code(let code):
+            case .verificationCode(let code):
                 var verifyRequest = makeTwoFactorRequest(url: Constants.URLs.grandSlamValidate, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion)
                 verifyRequest.setValue(code, forHTTPHeaderField: "security-code")
 
@@ -608,14 +608,23 @@ public extension DeveloperPortal {
                 debugLog("[SideSign] Trusted device 2FA code verified successfully!")
                 return
 
-            case .requestPhone(let targetPhoneID, let deliveryMode):
-                debugLog("[SideSign] User requested switching from trusted device to \(deliveryMode) (phoneID: \(targetPhoneID))...")
-                try await requestSMSTwoFactorCode(mode: deliveryMode.rawValue, phoneID: targetPhoneID, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
+            case .requestTrustedDevice:
+                lastError = nil
+                continue
+
+            case .requestSMS(let targetPhoneID):
+                debugLog("[SideSign] User requested switching from trusted device to SMS (phoneID: \(targetPhoneID))...")
+                try await requestSMSTwoFactorCode(mode: "sms", phoneID: targetPhoneID, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
+                return
+
+            case .requestVoice(let targetPhoneID):
+                debugLog("[SideSign] User requested switching from trusted device to voice (phoneID: \(targetPhoneID))...")
+                try await requestSMSTwoFactorCode(mode: "voice", phoneID: targetPhoneID, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion, verificationHandler: verificationHandler)
                 return
 
             case .cancel:
                 debugLog("[SideSign] User cancelled 2FA code entry.")
-                throw DeveloperPortalError.requiresTwoFactorAuthentication
+                throw DeveloperPortalError.userCancelled
             }
         }
     }
@@ -732,15 +741,15 @@ public extension DeveloperPortal {
         var lastError: String? = nil
         // keep trying as long as GSA allows us to do 
         while true {
-            let twoFactorMode: TwoFactorMode = (activeMode == "voice")
+            let twoFactorRequest: TwoFactorRequest = (activeMode == "voice")
                 ? .voice(phoneNumbers: phoneNumbers, activeID: phoneID, error: lastError)
                 : .sms(phoneNumbers: phoneNumbers, activeID: phoneID, error: lastError)
 
             debugLog("[SideSign] Prompting user for 2FA code via verificationHandler (request status: \(statusCode), phoneId: \(phoneID), mode: \(activeMode), phoneCount: \(phoneNumbers.count), error: \(lastError ?? "nil"))...")
-            let action = try await verificationHandler(twoFactorMode)
+            let action = try await verificationHandler(twoFactorRequest)
 
             switch action {
-            case .code(let code):
+            case .verificationCode(let code):
                 var verifyRequest = makeTwoFactorRequest(url: Constants.URLs.phoneSecurityCode, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, xcodeVersion: xcodeVersion)
                 verifyRequest.httpMethod = "POST"
                 verifyRequest.httpBody = try PropertyListSerialization.data(fromPropertyList: [
@@ -800,11 +809,40 @@ public extension DeveloperPortal {
                 debugLog("[SideSign] Secondary 2FA code verified successfully!")
                 return
 
-            case .requestPhone(let targetPhoneID, let deliveryMode):
+            case .requestTrustedDevice:
+                debugLog("[SideSign] User requested 2FA: .trustedDevice")
+                try await requestTrustedDeviceTwoFactorCode(
+                    dsid: dsid, 
+                    idmsToken: idmsToken, 
+                    anisetteData: anisetteData, 
+                    xcodeVersion: xcodeVersion, 
+                    verificationHandler: verificationHandler
+                )
+                return
+
+            case .requestSMS(let targetPhoneID):
                 lastError = nil
-                let requestedModeString = deliveryMode.rawValue
-                debugLog("[SideSign] User requested 2FA resend / change (phoneID: \(targetPhoneID), mode: \(requestedModeString))...")
-                currentMode = requestedModeString
+                debugLog("[SideSign] User requested 2FA: .sms(phoneID: \(targetPhoneID)")
+                currentMode = "sms"
+                let result = try await sendPhonePut(
+                    mode: currentMode,
+                    phoneID: targetPhoneID,
+                    knownPhoneNumbers: phoneNumbers,
+                    dsid: dsid,
+                    idmsToken: idmsToken,
+                    anisetteData: anisetteData,
+                    xcodeVersion: xcodeVersion
+                )
+                phoneID = result.phoneID
+                activeMode = result.activeMode
+                phoneNumbers = result.phoneNumbers
+                statusCode = result.statusCode
+                continue
+
+            case .requestVoice(let targetPhoneID):
+                lastError = nil
+                debugLog("[SideSign] User requested 2FA: .voice(phoneID: \(targetPhoneID)")
+                currentMode = "voice"
                 let result = try await sendPhonePut(
                     mode: currentMode,
                     phoneID: targetPhoneID,
@@ -822,7 +860,7 @@ public extension DeveloperPortal {
 
             case .cancel:
                 debugLog("[SideSign] User cancelled 2FA code entry.")
-                throw DeveloperPortalError.requiresTwoFactorAuthentication
+                throw DeveloperPortalError.userCancelled
             }
         }
     }

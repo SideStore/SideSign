@@ -1368,64 +1368,64 @@ public enum CommandHandler {
         return (anisetteData, newAdiPb, targetDataURL, devPass)
     }
 
-    private static func handleCLI2FA(mode: TwoFactorMode) async throws -> TwoFactorAction {
-        switch mode {
+    private static func handleCLI2FA(request: TwoFactorRequest) async throws -> TwoFactorResponse {
+        switch request {
         case .trustedDevice(let error):
             if let error = error {
                 print("\n[2FA] Verification Error: \(error)")
                 if let input = readInteractiveLine(prompt: "Press [Enter] to retry code entry, or 'c' to cancel: "), input.lowercased() == "c" {
-                    return TwoFactorAction.cancel
+                    return .cancel
                 }
             }
             guard let code = readInteractiveLine(prompt: "Enter 6-digit verification code from your Apple device (or 'p' for phone call/SMS, 'c' to cancel): "), !code.isEmpty else {
-                return TwoFactorAction.cancel
+                return .cancel
             }
             if code.lowercased() == "c" {
-                return TwoFactorAction.cancel
+                return .cancel
             } else if code.lowercased() == "p" {
-                return TwoFactorAction.requestPhone(id: "1", mode: TwoFactorDeliveryMode.sms)
+                return .requestSMS(phoneID: "1")
             } else {
-                return TwoFactorAction.code(code)
+                return .verificationCode(code)
             }
 
         case .sms(let phoneNumbers, let activeID, let error):
             if let error = error {
                 print("\n[SMS] Verification Error: \(error)")
                 if let input = readInteractiveLine(prompt: "Press [Enter] to retry code entry, or 'c' to cancel: "), input.lowercased() == "c" {
-                    return TwoFactorAction.cancel
+                    return .cancel
                 }
             }
             let activePhone = phoneNumbers.first(where: { $0.id == activeID })?.number ?? "phone"
             guard let code = readInteractiveLine(prompt: "Enter 6-digit code sent via SMS to \(activePhone) (or 'v' for voice call, 'r' to resend, 'c' to cancel): "), !code.isEmpty else {
-                return TwoFactorAction.cancel
+                return .cancel
             }
             if code.lowercased() == "c" {
-                return TwoFactorAction.cancel
+                return .cancel
             } else if code.lowercased() == "v" {
-                return TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.voice)
+                return .requestVoice(phoneID: activeID)
             } else if code.lowercased() == "r" {
-                return TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.sms)
+                return .requestSMS(phoneID: activeID)
             } else {
-                return TwoFactorAction.code(code)
+                return .verificationCode(code)
             }
 
         case .voice(let phoneNumbers, let activeID, let error):
             if let error = error {
                 print("\n[Voice] Verification Error: \(error)")
                 if let input = readInteractiveLine(prompt: "Press [Enter] to retry code entry, or 'c' to cancel: "), input.lowercased() == "c" {
-                    return TwoFactorAction.cancel
+                    return .cancel
                 }
             }
             let activePhone = phoneNumbers.first(where: { $0.id == activeID })?.number ?? "phone"
             guard let code = readInteractiveLine(prompt: "Enter 6-digit code from voice call to \(activePhone) (or 'r' to resend, 'c' to cancel): "), !code.isEmpty else {
-                return TwoFactorAction.cancel
+                return .cancel
             }
             if code.lowercased() == "c" {
-                return TwoFactorAction.cancel
+                return .cancel
             } else if code.lowercased() == "r" {
-                return TwoFactorAction.requestPhone(id: activeID, mode: TwoFactorDeliveryMode.voice)
+                return .requestVoice(phoneID: activeID)
             } else {
-                return TwoFactorAction.code(code)
+                return .verificationCode(code)
             }
         }
     }
