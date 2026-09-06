@@ -472,15 +472,37 @@ public extension DeveloperPortal {
 
     private func parseXMLUIAlertMessage(from data: Data) -> (title: String?, message: String?) {
         guard let str = String(data: data, encoding: .utf8) else { return (nil, nil) }
+        if str.contains("<pinView") {
+            return (nil, nil)
+        }
+        guard let alertTagRange = str.range(of: #"<alert(?![^>]*\bid=)[^>]*>"#, options: .regularExpression) else {
+            return (nil, nil)
+        }
+        let alertTag = String(str[alertTagRange])
         var title: String?
         var message: String?
-        if let titleRange = str.range(of: "(?<=title=\")[^\"]+", options: .regularExpression) {
-            title = String(str[titleRange])
+        if let titleRange = alertTag.range(of: #"(?<=title=")[^"]+"#, options: .regularExpression) {
+            title = String(alertTag[titleRange])
         }
-        if let msgRange = str.range(of: "(?<=message=\")[^\"]+", options: .regularExpression) {
-            message = String(str[msgRange])
+        if let msgRange = alertTag.range(of: #"(?<=message=")[^"]+"#, options: .regularExpression) {
+            message = String(alertTag[msgRange])
         }
         return (title, message)
+    }
+
+    private func parseXMLUIServerInfo(from data: Data) -> (phoneID: String?, mode: String?) {
+        guard let str = String(data: data, encoding: .utf8) else { return (nil, nil) }
+        guard let range = str.range(of: #"<serverInfo[^>]*>"#, options: .regularExpression) else { return (nil, nil) }
+        let tag = String(str[range])
+        var phoneID: String?
+        var mode: String?
+        if let idRange = tag.range(of: #"(?<=phoneNumber\.id=")[^"]+"#, options: .regularExpression) {
+            phoneID = String(tag[idRange])
+        }
+        if let modeRange = tag.range(of: #"(?<=mode=")[^"]+"#, options: .regularExpression) {
+            mode = String(tag[modeRange])
+        }
+        return (phoneID, mode)
     }
 
     private func throwIfXMLUIErrorAlert(in data: Data, statusCode: Int, actionName: String) throws {
@@ -714,12 +736,14 @@ public extension DeveloperPortal {
         let trustedPhoneListFirst = (responseDict?["trustedPhoneNumbers"] as? [[String: any Sendable]])?.first
         let phoneDict = singlePhoneDict ?? phoneListFirst ?? trustedPhoneListFirst
 
+        let (xmluiServerPhoneID, xmluiServerMode) = parseXMLUIServerInfo(from: data)
+
         let rawPhoneID = (phoneDict?["id"] as? CustomStringConvertible)?.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedPhoneID: String? = (rawPhoneID?.isEmpty == false) ? rawPhoneID : nil
+        let resolvedPhoneID: String? = (rawPhoneID?.isEmpty == false) ? rawPhoneID : xmluiServerPhoneID
         let resolvedRequestedID: String? = (requestedPhoneID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false) ? requestedPhoneID : nil
 
         let phoneID = resolvedPhoneID ?? resolvedRequestedID ?? parsedNumbers.first?.id ?? "1"
-        let activeMode = (phoneDict?["mode"] as? String) ?? requestedMode
+        let activeMode = (phoneDict?["mode"] as? String) ?? xmluiServerMode ?? requestedMode
 
         let numberWithDialCode = phoneDict?["numberWithDialCode"] as? String
         let obfuscatedNumber = phoneDict?["obfuscatedNumber"] as? String
