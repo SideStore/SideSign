@@ -35,6 +35,7 @@ public enum DeveloperPortalError: Error, LocalizedError, Sendable {
     case tooManyCertificates(cause: String)
     case tooManyAttempts(cause: String)
     case accountRepairRequired(url: URL?, message: String)
+    case invalid2FAResponse(cause: String? = nil)
 
     public var errorDescription: String? {
         switch self {
@@ -64,6 +65,7 @@ public enum DeveloperPortalError: Error, LocalizedError, Sendable {
         case .invalidAnisetteData(let cause):                   return "Invalid anisette data: \(cause)"
         case .tooManyCertificates(let cause):                   return "Maximum number of certificates reached: \(cause)"
         case .accountRepairRequired(_, let message):            return message.isEmpty ? Constants.defaultAccountRepairMessage : message
+        case .invalid2FAResponse(let cause):                    return cause ?? "Invalid two-factor authentication response."
         }
     }
 }

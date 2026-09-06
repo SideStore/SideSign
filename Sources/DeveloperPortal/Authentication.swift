@@ -512,9 +512,8 @@ public extension DeveloperPortal {
                 .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
                 .joined(separator: ": ")
-            let rawStr = prettyJSONString(from: data)
             debugLog("[SideSign] \(actionName) alert from Apple (HTTP \(statusCode)): \(alertMsg)")
-            throw ServerError.badServerResponse(reason: alertMsg, jsonPayload: rawStr)
+            throw DeveloperPortalError.invalid2FAResponse(cause: xmluiMessage ?? alertMsg)
         }
     }
 
@@ -834,6 +833,12 @@ public extension DeveloperPortal {
             let msg = errorMsg ?? "2FA verification error"
             debugLog("[SideSign] 2FA verification error (\(errorCode), HTTP \(statusCode)): \(msg)")
             throw ServerError.underlyingError(code: errorCode, message: msg)
+        }
+
+        if xmluiTitle != nil || xmluiMessage != nil {
+            let message = xmluiMessage ?? errorMsg ?? xmluiTitle ?? "Verification failed"
+            debugLog("[SideSign] 2FA verification fatal alert from Apple (HTTP \(statusCode)): \(message)")
+            throw DeveloperPortalError.invalid2FAResponse(cause: message)
         }
 
         guard statusCode == HTTPStatusCodes.ok else {
