@@ -102,6 +102,7 @@ public struct SessionManager: Sendable {
             let mData = try Data(contentsOf: teamMachineURL)
             try mData.write(to: DeviceDataManager.defaultURL, options: .atomic)
         }
+        AnisetteDataManager.shared.clearCache()
     }
 
     public static func setActiveSession(at sourceURL: URL) throws {
@@ -110,6 +111,7 @@ public struct SessionManager: Sendable {
         }
         let data = try Data(contentsOf: sourceURL)
         try data.write(to: defaultSessionURL, options: .atomic)
+        AnisetteDataManager.shared.clearCache()
     }
 
     public static func save(
@@ -251,6 +253,7 @@ public struct SessionManager: Sendable {
         if FileManager.default.fileExists(atPath: targetURL.path) {
             try FileManager.default.removeItem(at: targetURL)
         }
+        AnisetteDataManager.shared.clearCache()
     }
 
     private static func deriveMachineKey(salt: Data) -> SymmetricKey {

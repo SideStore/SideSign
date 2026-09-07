@@ -132,6 +132,8 @@ public enum Constants {
         public static let posixLocaleIdentifier       = "en_US_POSIX"
         public static let defaultTimeZoneAbbreviation = "UTC"
         public static let cachingPollingDelayNanoseconds: UInt64 = 200_000_000
+        public static let remoteCacheDuration: TimeInterval = 30.0
+        public static let serverValidationTimeout: TimeInterval = 3.0
     }
 }
 

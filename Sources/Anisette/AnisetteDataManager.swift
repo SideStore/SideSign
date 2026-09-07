@@ -232,7 +232,7 @@ public enum AnisetteError: LocalizedError, Sendable {
     }
 }
 
-public actor AnisetteDataManager {
+public final class AnisetteDataManager: @unchecked Sendable {
     public static let shared = AnisetteDataManager()
 
     public static func validateLibrariesExist(at directory: URL) -> Bool {
@@ -240,9 +240,22 @@ public actor AnisetteDataManager {
     }
 
     public var activeMode: AnisetteMode?
-    public nonisolated let baseAnisetteDirectory: URL
+    public let baseAnisetteDirectory: URL
     private var localProvider: AnisetteClient?
     private var isCaching: Bool = false
+
+    private struct RemoteAnisetteCacheEntry {
+        let serverURL: URL
+        let identifier: UUID
+        let data: AnisetteData
+        let newAdiBlob: Data?
+        let timestamp: Date
+    }
+    private var remoteCache: RemoteAnisetteCacheEntry?
+    
+    public func clearCache() {
+        remoteCache = nil
+    }
 
     public static var defaultBaseDirectory: URL {
         #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
@@ -271,19 +284,19 @@ public actor AnisetteDataManager {
         self.activeMode = mode
     }
 
-    public nonisolated var localLibsDir: URL {
+    public var localLibsDir: URL {
         baseAnisetteDirectory.appendingPathComponent(Constants.Anisette.localLibsSubdirectory, isDirectory: true)
     }
 
-    public nonisolated var remoteLibsDir: URL {
+    public var remoteLibsDir: URL {
         baseAnisetteDirectory.appendingPathComponent(Constants.Anisette.remoteLibsSubdirectory, isDirectory: true)
     }
 
-    public nonisolated var provisioningDir: URL {
+    public var provisioningDir: URL {
         baseAnisetteDirectory.appendingPathComponent(Constants.Anisette.provisioningSubdirectory, isDirectory: true)
     }
 
-    public nonisolated var libsDir: URL {
+    public var libsDir: URL {
         if AnisetteClient.validateLibrariesExist(at: localLibsDir) {
             return localLibsDir
         }
@@ -297,7 +310,7 @@ public actor AnisetteDataManager {
     public static func validateServer(url: URL, strict: Bool = false) async -> Bool {
         let v3URL = url.appendingPathComponent("v3").appendingPathComponent("client_info")
         var v3Req = URLRequest(url: v3URL)
-        v3Req.timeoutInterval = 3
+        v3Req.timeoutInterval = Constants.Anisette.serverValidationTimeout
         v3Req.httpMethod = "GET"
         #if canImport(Darwin)
         v3Req.cachePolicy = .reloadIgnoringLocalCacheData
@@ -313,7 +326,7 @@ public actor AnisetteDataManager {
         }
 
         var rootReq = URLRequest(url: url)
-        rootReq.timeoutInterval = 3
+        rootReq.timeoutInterval = Constants.Anisette.serverValidationTimeout
         rootReq.httpMethod = "GET"
         #if canImport(Darwin)
         rootReq.cachePolicy = .reloadIgnoringLocalCacheData
@@ -405,6 +418,17 @@ public actor AnisetteDataManager {
             throw AnisetteError.modeNotConfigured
         }
 
+        if case .remote(let serverURL) = resolvedMode {
+            if let cache = remoteCache,
+               cache.serverURL == serverURL,
+               cache.identifier == identifier,
+               Date().timeIntervalSince(cache.timestamp) < Constants.Anisette.remoteCacheDuration 
+            {
+                debugLog("[AnisetteDataManager] Reusing cached remote Anisette data for \(serverURL.absoluteString) (age: \(String(format: "%.1fs", Date().timeIntervalSince(cache.timestamp))))")
+                return (cache.data, cache.newAdiBlob)
+            }
+        }
+
         let effectiveHeaders = (headers ?? AnisetteRequestHeaders.defaultHeaders).with {
             if $0.deviceID == nil {
                 $0.deviceID = identifier.uuidString.uppercased()
@@ -421,8 +445,22 @@ public actor AnisetteDataManager {
             )
 
             let anisetteData = try Self.validateAndCreateAnisetteData(from: rawHeaders)
+
+            if case .remote(let serverURL) = resolvedMode {
+                remoteCache = RemoteAnisetteCacheEntry(
+                    serverURL: serverURL,
+                    identifier: identifier,
+                    data: anisetteData,
+                    newAdiBlob: newBlob,
+                    timestamp: Date()
+                )
+            }
+
             return (anisetteData, newBlob)
         } catch {
+            if case .remote(let serverURL) = resolvedMode, remoteCache?.serverURL == serverURL {
+                remoteCache = nil
+            }
             if let errorHandler = onError {
                 let shouldContinue = try await errorHandler(error)
                 guard shouldContinue else {
