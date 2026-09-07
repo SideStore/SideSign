@@ -124,13 +124,6 @@ public enum Constants {
         public static let localLibsSubdirectory       = "local-libs"
         public static let remoteLibsSubdirectory      = "remote-libs"
         public static let provisioningSubdirectory    = "provisioning"
-        public static let defaultUserAgent            = "akd/1.0 CFNetwork/1408.0.4 Darwin/22.5.0"
-        public static let defaultMdLu                 = ""
-        public static let defaultMdRinfo              = "17106176"
-        public static let defaultDeviceSerialNumber   = "0"
-        public static let iso8601DateFormat           = "yyyy-MM-dd'T'HH:mm:ss'Z'"
-        public static let posixLocaleIdentifier       = "en_US_POSIX"
-        public static let defaultTimeZoneAbbreviation = "UTC"
         public static let cachingPollingDelayNanoseconds: UInt64 = 200_000_000
         public static let remoteCacheDuration: TimeInterval = 30.0
         public static let serverValidationTimeout: TimeInterval = 3.0
