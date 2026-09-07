@@ -332,47 +332,47 @@ public actor AnisetteDataManager {
     public static func parseAnisetteData(
         from dictionary: [String: String],
         defaultDeviceID: String? = nil
-    ) throws -> AnisetteData {
-        let headers = AnisetteHeadersDTO.toHeaders(from: dictionary)
-        guard let anisetteData = AnisetteData(headers: headers, defaultDeviceID: defaultDeviceID) else {
-            throw AnisetteError.invalidAnisetteData
+    ) -> AnisetteRequestHeaders {
+        var headers = AnisetteHeadersDTO.toHeaders(from: dictionary)
+        if headers.deviceID == nil, let defaultDeviceID = defaultDeviceID {
+            headers.deviceID = defaultDeviceID
         }
-        return anisetteData
+        return headers
     }
 
     public static func safeTimeZoneAbbreviation(for timeZone: TimeZone, date: Date = Date()) -> String {
         AnisetteKit.safeTimeZoneAbbreviation(for: timeZone, date: date)
     }
 
-    public static func toHTTPHeaders(data: AnisetteData) -> [String: String] {
-        AnisetteHeadersDTO.toDictionary(from: data.headers)
+    public static func toHTTPHeaders(data: AnisetteRequestHeaders) -> [String: String] {
+        AnisetteHeadersDTO.toDictionary(from: data)
     }
 
     public func fetchAnisetteData(
         mode: AnisetteMode? = nil,
         identifier: UUID,
         existingAdiBlob: Data? = nil,
-        headers: AnisetteHeaders? = nil,
+        headers: AnisetteRequestHeaders? = nil,
         onError: (@Sendable (Error) async throws -> Bool)? = nil
-    ) async throws -> (data: AnisetteData, newAdiBlob: Data?) {
+    ) async throws -> (data: AnisetteRequestHeaders, newAdiBlob: Data?) {
         guard let resolvedMode = mode ?? self.activeMode else {
             throw AnisetteError.modeNotConfigured
         }
 
-        let effectiveHeaders = headers ?? AnisetteHeaders.defaultHeaders
+        let effectiveHeaders = headers ?? AnisetteRequestHeaders.defaultHeaders
         let clientInfo = effectiveHeaders.clientInfo ?? AnisetteConstants.defaultClientInfo
-        let (client, provider) = try await getClient(for: resolvedMode, clientInfo: clientInfo)
+        let client = try await getClient(for: resolvedMode, clientInfo: clientInfo)
 
         do {
-            let (rawHeaders, newBlob) = try await client.getHeaders(
+            let (rawHeaders, newBlob) = try await client.getAnisetteData(
                 identifier: identifier,
                 storage: .memory(existingBlob: existingAdiBlob),
-                headers: effectiveHeaders,
-                provider: provider
+                headers: effectiveHeaders
             )
 
-            guard let anisetteData = AnisetteData(headers: AnisetteHeaders(rawHeaders: rawHeaders), defaultDeviceID: identifier.uuidString.uppercased()) else {
-                throw AnisetteError.invalidAnisetteData
+            var anisetteData = AnisetteRequestHeaders(rawHeaders: rawHeaders)
+            if anisetteData.deviceID == nil {
+                anisetteData.deviceID = identifier.uuidString.uppercased()
             }
 
             return (anisetteData, newBlob)
@@ -387,26 +387,24 @@ public actor AnisetteDataManager {
         }
     }
 
-    private func getClient(for mode: AnisetteMode, clientInfo: String) async throws -> (client: AnisetteClient, provider: (any AnisetteDataProvider)?) {
+    private func getClient(for mode: AnisetteMode, clientInfo: String) async throws -> AnisetteClient {
         switch mode {
         case .remote(let server):
             try FileManager.default.createDirectory(at: provisioningDir, withIntermediateDirectories: true)
-            let client = try AnisetteClient(
+            return try AnisetteClient(
                 provisioningDir: provisioningDir,
                 clientInfo: clientInfo,
-                libraryDirectoryResolver: { self.libsDir }
+                provider: RemoteAnisetteDataProvider(serverURL: server)
             )
-            return (client, RemoteAnisetteDataProvider(serverURL: server))
 
         case .localODA(let libDir, let prov):
             let targetProvDir = prov ?? provisioningDir
             try FileManager.default.createDirectory(at: targetProvDir, withIntermediateDirectories: true)
-            let client = try AnisetteClient(
+            return try AnisetteClient(
                 provisioningDir: targetProvDir,
                 clientInfo: clientInfo,
                 libraryDirectoryResolver: { libDir }
             )
-            return (client, nil)
 
         case .remoteODA(let sourceURL, let fallbackURL):
             try FileManager.default.createDirectory(at: libsDir, withIntermediateDirectories: true)
@@ -414,8 +412,7 @@ public actor AnisetteDataManager {
             if !AnisetteClient.validateLibrariesExist(at: libsDir) {
                 try await setupFromRemote(serverSourceURL: sourceURL, fallbackODAURL: fallbackURL, clientInfo: clientInfo)
             }
-            let client = try await ensureProviderLoaded(clientInfo: clientInfo)
-            return (client, nil)
+            return try await ensureProviderLoaded(clientInfo: clientInfo)
         }
     }
 
@@ -424,10 +421,10 @@ public actor AnisetteDataManager {
         startIndex: Int = 0,
         identifier: UUID,
         existingAdiBlob: Data? = nil,
-        headers: AnisetteHeaders? = nil,
+        headers: AnisetteRequestHeaders? = nil,
         onError: (@Sendable (Error) async throws -> Bool)? = nil,
         onSuccess: (@Sendable (URL) -> Void)? = nil
-    ) async throws -> (data: AnisetteData, newAdiBlob: Data?) {
+    ) async throws -> (data: AnisetteRequestHeaders, newAdiBlob: Data?) {
         guard !servers.isEmpty else {
             debugLog("[Anisette Failover] Failed: No servers configured.")
             throw AnisetteError.noServersConfigured

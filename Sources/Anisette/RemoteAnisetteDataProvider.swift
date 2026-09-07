@@ -54,7 +54,7 @@ public struct RemoteAnisetteDataProvider: AnisetteDataProvider, Sendable {
         provisioningDir: String,
         identifier: [UInt8],
         adiPb: [UInt8]
-    ) async throws -> AnisetteHeaders {
+    ) async throws -> AnisetteDataResponse {
         let cleanIdentifier = identifier.map { String(format: "%02x", $0) }.joined()
         let baseURL = serverURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
 
@@ -80,7 +80,7 @@ public struct RemoteAnisetteDataProvider: AnisetteDataProvider, Sendable {
                         let msg = json["message"] ?? "GetHeadersError"
                         throw AnisetteError.badServerResponse(statusCode: -1, payload: msg)
                     }
-                    return AnisetteHeadersDTO.toHeaders(from: json)
+                    return try AnisetteDataResponse(from: json)
                 }
             }
         }
@@ -101,7 +101,7 @@ public struct RemoteAnisetteDataProvider: AnisetteDataProvider, Sendable {
             throw AnisetteError.invalidAnisetteData
         }
 
-        return AnisetteHeadersDTO.toHeaders(from: json)
+        return try AnisetteDataResponse(from: json)
     }
 
     public func startProvision(
