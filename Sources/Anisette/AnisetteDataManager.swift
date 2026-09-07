@@ -429,19 +429,14 @@ public final class AnisetteDataManager: @unchecked Sendable {
             }
         }
 
-        let effectiveHeaders = (headers ?? AnisetteRequestHeaders.defaultHeaders).with {
-            if $0.deviceID == nil {
-                $0.deviceID = identifier.uuidString.uppercased()
-            }
-        }
-        let clientInfo = effectiveHeaders.clientInfo ?? AnisetteConstants.defaultClientInfo
+        let clientInfo = headers?.clientInfo ?? AnisetteConstants.defaultClientInfo
         let client = try await getClient(for: resolvedMode, clientInfo: clientInfo)
 
         do {
             let (rawHeaders, newBlob) = try await client.getAnisetteData(
                 identifier: identifier,
                 storage: .memory(existingBlob: existingAdiBlob),
-                headers: effectiveHeaders
+                headers: headers
             )
 
             let anisetteData = try Self.validateAndCreateAnisetteData(from: rawHeaders)
