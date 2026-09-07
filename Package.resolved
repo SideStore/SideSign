@@ -1,5 +1,5 @@
 {
-  "originHash" : "1dd9efa886e13fa0f366a0ddf3781d393456a313f2ff3488de85e06cc80e5d63",
+  "originHash" : "5ef06eb4f694ad90a81b9009425888e7254561d3eb97195f436e3ef4ad63c136",
   "pins" : [
     {
       "identity" : "anisettekit",
@@ -7,7 +7,7 @@
       "location" : "https://github.com/mahee96/AnisetteKit.git",
       "state" : {
         "branch" : "main",
-        "revision" : "2cc982d9425237b8f702d28e4272e5a31105ad58"
+        "revision" : "d7b9f23668fa91c84204ec294bca6e8ec1c470f2"
       }
     },
     {

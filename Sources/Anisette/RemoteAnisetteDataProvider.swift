@@ -10,6 +10,7 @@ import Foundation
 import AnisetteKit
 
 public struct RemoteAnisetteDataProvider: AnisetteDataProvider, Sendable {
+    public var requiresLocalLibraries: Bool { false }
 
     public let serverURL: URL
 

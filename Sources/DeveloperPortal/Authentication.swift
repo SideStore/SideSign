@@ -29,16 +29,16 @@ public extension DeveloperPortal {
             "pbe": false,
             "prkgen": true,
             "svct": Constants.grandSlamService,
-            "loc": anisetteData.locale.identifier.components(separatedBy: "@").first ?? "en_US",
-            "X-Apple-Locale": anisetteData.locale.identifier.components(separatedBy: "@").first ?? "en_US",
+            "loc": anisetteData.locale,
+            "X-Apple-Locale": anisetteData.locale,
             "X-Apple-I-MD": anisetteData.oneTimePassword,
             "X-Apple-I-MD-M": anisetteData.machineID,
-            "X-Mme-Device-Id": anisetteData.deviceUniqueIdentifier,
+            "X-Mme-Device-Id": anisetteData.deviceID,
             "X-Apple-I-MD-LU": anisetteData.localUserID,
             "X-Apple-I-MD-RINFO": anisetteData.routingInfo,
-            "X-Apple-I-SRL-NO": anisetteData.deviceSerialNumber,
-            "X-Apple-I-Client-Time": formatDate(anisetteData.date),
-            "X-Apple-I-TimeZone": safeTimeZoneAbbreviation(for: anisetteData.timeZone, date: anisetteData.date)
+            "X-Apple-I-SRL-NO": anisetteData.serialNumber,
+            "X-Apple-I-Client-Time": anisetteData.clientTime,
+            "X-Apple-I-TimeZone": anisetteData.timeZone
         ]
 
         guard let srpClient = SRPClient(),
@@ -307,7 +307,7 @@ public extension DeveloperPortal {
 
         let headers: [String: String] = [
             "Content-Type": "text/x-xml-plist",
-            "X-MMe-Client-Info": anisetteData.deviceDescription,
+            "X-MMe-Client-Info": anisetteData.clientInfo,
             "Accept": "*/*",
             "User-Agent": Constants.userAgent
         ]
@@ -865,6 +865,7 @@ public extension DeveloperPortal {
         let encodedIdentityToken = Data(identityToken.utf8).base64EncodedString()
 
         var request = URLRequest(url: url)
+        let a = context.anisetteData
         let headers: [String: String] = [
             "Accept": "application/x-buddyml",
             "Accept-Language": "en-us",
@@ -873,15 +874,15 @@ public extension DeveloperPortal {
             "X-Apple-App-Info": Constants.authApp,
             "X-Xcode-Version": context.xcodeVersion,
             "X-Apple-Identity-Token": encodedIdentityToken,
-            "X-Apple-I-MD-M": context.anisetteData.machineID,
-            "X-Apple-I-MD": context.anisetteData.oneTimePassword,
-            "X-Apple-I-MD-LU": context.anisetteData.localUserID,
-            "X-Apple-I-MD-RINFO": "\(context.anisetteData.routingInfo)",
-            "X-Mme-Device-Id": context.anisetteData.deviceUniqueIdentifier,
-            "X-MMe-Client-Info": context.anisetteData.deviceDescription,
-            "X-Apple-I-Client-Time": formatDate(context.anisetteData.date),
-            "X-Apple-Locale": context.anisetteData.locale.identifier,
-            "X-Apple-I-TimeZone": safeTimeZoneAbbreviation(for: context.anisetteData.timeZone, date: context.anisetteData.date)
+            "X-Apple-I-MD": a.oneTimePassword,
+            "X-Apple-I-MD-M": a.machineID,
+            "X-Mme-Device-Id": a.deviceID,
+            "X-Apple-I-MD-LU": a.localUserID,
+            "X-Apple-I-MD-RINFO": a.routingInfo,
+            "X-Apple-I-SRL-NO": a.serialNumber,
+            "X-Apple-I-Client-Time": a.clientTime,
+            "X-Apple-Locale": a.locale,
+            "X-Apple-I-TimeZone": a.timeZone
         ]
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         return request

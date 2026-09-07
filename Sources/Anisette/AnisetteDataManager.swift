@@ -232,10 +232,12 @@ public enum AnisetteError: LocalizedError, Sendable {
     }
 }
 
-public typealias OnDeviceAnisetteError = AnisetteError
-
 public actor AnisetteDataManager {
     public static let shared = AnisetteDataManager()
+
+    public static func validateLibrariesExist(at directory: URL) -> Bool {
+        AnisetteClient.validateLibrariesExist(at: directory)
+    }
 
     public var activeMode: AnisetteMode?
     public nonisolated let baseAnisetteDirectory: URL
@@ -329,23 +331,67 @@ public actor AnisetteDataManager {
         return false
     }
 
-    public static func parseAnisetteData(
-        from dictionary: [String: String],
-        defaultDeviceID: String? = nil
-    ) -> AnisetteRequestHeaders {
-        var headers = AnisetteHeadersDTO.toHeaders(from: dictionary)
-        if headers.deviceID == nil, let defaultDeviceID = defaultDeviceID {
-            headers.deviceID = defaultDeviceID
+    public static func validateAndCreateAnisetteData(from headers: AnisetteRequestHeaders) throws -> AnisetteData {
+        let dict = AnisetteHeadersDTO.toDictionary(from: headers)
+        return try validateAndCreateAnisetteData(from: dict)
+    }
+
+    public static func validateAndCreateAnisetteData(from dictionary: [String: String]) throws -> AnisetteData {
+        let requiredKeys: [String] = [
+            AnisetteConstants.Headers.machineID,
+            AnisetteConstants.Headers.oneTimePassword,
+            AnisetteConstants.Headers.localUserID,
+            AnisetteConstants.Headers.routingInfo,
+            AnisetteConstants.Headers.deviceID,
+            AnisetteConstants.Headers.serialNumber,
+            AnisetteConstants.Headers.clientInfo,
+            AnisetteConstants.Headers.userAgent,
+            AnisetteConstants.Headers.clientTime,
+            AnisetteConstants.Headers.locale,
+            AnisetteConstants.Headers.timeZone
+        ]
+
+        var missingKeys: [String] = []
+        for key in requiredKeys {
+            if let value = dictionary[key], !value.isEmpty {
+                continue
+            }
+            missingKeys.append(key)
         }
-        return headers
+
+        guard missingKeys.isEmpty else {
+            throw DeveloperPortalError.invalidAnisetteData(
+                cause: "Missing required Anisette keys: \(missingKeys.joined(separator: ", "))"
+            )
+        }
+
+        return AnisetteData(
+            machineID: dictionary[AnisetteConstants.Headers.machineID]!,
+            oneTimePassword: dictionary[AnisetteConstants.Headers.oneTimePassword]!,
+            localUserID: dictionary[AnisetteConstants.Headers.localUserID]!,
+            routingInfo: dictionary[AnisetteConstants.Headers.routingInfo]!,
+            deviceID: dictionary[AnisetteConstants.Headers.deviceID]!,
+            serialNumber: dictionary[AnisetteConstants.Headers.serialNumber]!,
+            clientInfo: dictionary[AnisetteConstants.Headers.clientInfo]!,
+            userAgent: dictionary[AnisetteConstants.Headers.userAgent]!,
+            clientTime: dictionary[AnisetteConstants.Headers.clientTime]!,
+            locale: dictionary[AnisetteConstants.Headers.locale]!,
+            timeZone: dictionary[AnisetteConstants.Headers.timeZone]!
+        )
+    }
+
+    public static func parseAnisetteData(
+        from dictionary: [String: String]
+    ) throws -> AnisetteData {
+        try validateAndCreateAnisetteData(from: dictionary)
     }
 
     public static func safeTimeZoneAbbreviation(for timeZone: TimeZone, date: Date = Date()) -> String {
         AnisetteKit.safeTimeZoneAbbreviation(for: timeZone, date: date)
     }
 
-    public static func toHTTPHeaders(data: AnisetteRequestHeaders) -> [String: String] {
-        AnisetteHeadersDTO.toDictionary(from: data)
+    public static func toHTTPHeaders(data: AnisetteData) -> [String: String] {
+        AnisetteHeadersDTO.toDictionary(from: data.toRequestHeaders())
     }
 
     public func fetchAnisetteData(
@@ -354,12 +400,16 @@ public actor AnisetteDataManager {
         existingAdiBlob: Data? = nil,
         headers: AnisetteRequestHeaders? = nil,
         onError: (@Sendable (Error) async throws -> Bool)? = nil
-    ) async throws -> (data: AnisetteRequestHeaders, newAdiBlob: Data?) {
+    ) async throws -> (data: AnisetteData, newAdiBlob: Data?) {
         guard let resolvedMode = mode ?? self.activeMode else {
             throw AnisetteError.modeNotConfigured
         }
 
-        let effectiveHeaders = headers ?? AnisetteRequestHeaders.defaultHeaders
+        let effectiveHeaders = (headers ?? AnisetteRequestHeaders.defaultHeaders).with {
+            if $0.deviceID == nil {
+                $0.deviceID = identifier.uuidString.uppercased()
+            }
+        }
         let clientInfo = effectiveHeaders.clientInfo ?? AnisetteConstants.defaultClientInfo
         let client = try await getClient(for: resolvedMode, clientInfo: clientInfo)
 
@@ -370,11 +420,7 @@ public actor AnisetteDataManager {
                 headers: effectiveHeaders
             )
 
-            var anisetteData = AnisetteRequestHeaders(rawHeaders: rawHeaders)
-            if anisetteData.deviceID == nil {
-                anisetteData.deviceID = identifier.uuidString.uppercased()
-            }
-
+            let anisetteData = try Self.validateAndCreateAnisetteData(from: rawHeaders)
             return (anisetteData, newBlob)
         } catch {
             if let errorHandler = onError {
@@ -424,7 +470,7 @@ public actor AnisetteDataManager {
         headers: AnisetteRequestHeaders? = nil,
         onError: (@Sendable (Error) async throws -> Bool)? = nil,
         onSuccess: (@Sendable (URL) -> Void)? = nil
-    ) async throws -> (data: AnisetteRequestHeaders, newAdiBlob: Data?) {
+    ) async throws -> (data: AnisetteData, newAdiBlob: Data?) {
         guard !servers.isEmpty else {
             debugLog("[Anisette Failover] Failed: No servers configured.")
             throw AnisetteError.noServersConfigured

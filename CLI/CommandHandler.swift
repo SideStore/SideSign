@@ -530,7 +530,7 @@ public enum CommandHandler {
                     }
                 }
                 mode = .remote(server: url)
-            } else if AnisetteClient.validateLibrariesExist(at: AnisetteDataManager.shared.libsDir) {
+            } else if AnisetteDataManager.validateLibrariesExist(at: AnisetteDataManager.shared.libsDir) {
                 mode = .localODA(libsDir: AnisetteDataManager.shared.libsDir)
             } else {
                 throw CLIError.missingRequiredArgument("""
@@ -598,7 +598,8 @@ public enum CommandHandler {
             let outputJSON = asJSON
 
             let errorHandler: @Sendable (Error) async throws -> Bool = { error in
-                if case AnisetteError.outdatedV1Server(let serverURL, let reason) = error {
+                if let anisetteError = error as? SideSign.AnisetteError, 
+                   case .outdatedV1Server(let serverURL, let reason) = anisetteError {
                     if !outputJSON {
                         print()
                         if let reason = reason, !reason.isEmpty {
@@ -619,7 +620,7 @@ public enum CommandHandler {
                 return false
             }
 
-            let customHeaders = anisetteDeviceUDID != nil ? AnisetteHeaders().with { $0.deviceID = anisetteDeviceUDID } : nil
+            let customHeaders = anisetteDeviceUDID != nil ? AnisetteRequestHeaders().with { $0.deviceID = anisetteDeviceUDID } : nil
 
             if enableFailover {
                 let res = try await provider.fetchAnisetteDataWithFailover(
@@ -682,9 +683,9 @@ public enum CommandHandler {
                 print("RoutingInfo:            \(data.routingInfo)")
                 print("DeviceUniqueIdentifier: \(data.deviceUniqueIdentifier)")
                 print("DeviceSerialNumber:     \(data.deviceSerialNumber)")
-                print("Date:                   \(data.date)")
-                print("Locale:                 \(data.locale.identifier)")
-                print("TimeZone:               \(data.timeZone.identifier)")
+                print("ClientTime:             \(data.clientTime)")
+                print("Locale:                 \(data.locale)")
+                print("TimeZone:               \(data.timeZone)")
             }
         }
     }
@@ -1260,7 +1261,7 @@ public enum CommandHandler {
                 }
             }
             mode = .remote(server: url)
-        } else if AnisetteClient.validateLibrariesExist(at: AnisetteDataManager.shared.libsDir) {
+        } else if AnisetteDataManager.validateLibrariesExist(at: AnisetteDataManager.shared.libsDir) {
             mode = .localODA(libsDir: AnisetteDataManager.shared.libsDir)
         } else {
             throw CLIError.missingRequiredArgument("""
@@ -1308,7 +1309,8 @@ public enum CommandHandler {
         let newAdiPb: Data?
 
         let errorHandler: @Sendable (Error) async throws -> Bool = { error in
-            if case AnisetteError.outdatedV1Server(let serverURL, let reason) = error {
+            if let anisetteError = error as? SideSign.AnisetteError, 
+               case .outdatedV1Server(let serverURL, let reason) = anisetteError {
                 print()
                 if let reason = reason, !reason.isEmpty {
                     printWarning("V3 Anisette is unavailable on '\(serverURL.absoluteString)' (\(reason)).")

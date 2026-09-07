@@ -276,13 +276,13 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
             "X-Apple-I-MD-M": a.machineID,
             "X-Apple-I-MD": a.oneTimePassword,
             "X-Apple-I-MD-LU": a.localUserID,
-            "X-Apple-I-MD-RINFO": "\(a.routingInfo)",
-            "X-Mme-Device-Id": a.deviceUniqueIdentifier,
-            "X-MMe-Client-Info": a.deviceDescription,
-            "X-Apple-I-Client-Time": formatDate(a.date),
-            "X-Apple-Locale": a.locale.identifier,
-            "X-Apple-I-Locale": a.locale.identifier,
-            "X-Apple-I-TimeZone": safeTimeZoneAbbreviation(for: a.timeZone, date: a.date)
+            "X-Apple-I-MD-RINFO": a.routingInfo,
+            "X-Mme-Device-Id": a.deviceID,
+            "X-MMe-Client-Info": a.clientInfo,
+            "X-Apple-I-Client-Time": a.clientTime,
+            "X-Apple-Locale": a.locale,
+            "X-Apple-I-Locale": a.locale,
+            "X-Apple-I-TimeZone": a.timeZone
         ]
 
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
@@ -383,12 +383,13 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
             headers["X-Apple-I-MD-M"] = a.machineID
             headers["X-Apple-I-MD"] = a.oneTimePassword
             headers["X-Apple-I-MD-LU"] = a.localUserID
-            headers["X-Apple-I-MD-RINFO"] = "\(a.routingInfo)"
-            headers["X-Mme-Device-Id"] = a.deviceUniqueIdentifier
-            headers["X-MMe-Client-Info"] = a.deviceDescription
-            headers["X-Apple-I-Client-Time"] = formatDate(Date())
-            headers["X-Apple-Locale"] = a.locale.identifier
-            headers["X-Apple-I-TimeZone"] = safeTimeZoneAbbreviation(for: a.timeZone, date: Date())
+            headers["X-Apple-I-MD-RINFO"] = a.routingInfo
+            headers["X-Mme-Device-Id"] = a.deviceID
+            headers["X-MMe-Client-Info"] = a.clientInfo
+            headers["X-Apple-I-Client-Time"] = a.clientTime
+            headers["X-Apple-Locale"] = a.locale
+            headers["X-Apple-I-Locale"] = a.locale
+            headers["X-Apple-I-TimeZone"] = a.timeZone
         }
 
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
