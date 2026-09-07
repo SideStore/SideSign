@@ -111,8 +111,7 @@ public struct ProvisioningProfile: Sendable, Codable, Equatable, Hashable, Ident
     }
 
     enum CodingKeys: String, CodingKey {
-        case encodedProfile
-        case provisioningProfileId
+        case identifier
         case name
         case uuid
         case bundleIdentifier
@@ -123,18 +122,10 @@ public struct ProvisioningProfile: Sendable, Codable, Equatable, Hashable, Ident
         case deviceIDs
         case isFreeProvisioningProfile
         case data
-        case identifier
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        if let encodedData = try? container.decodeIfPresent(Data.self, forKey: .encodedProfile),
-           let profile = ProvisioningProfile(data: encodedData) {
-            var mutable = profile
-            mutable.identifier = try? container.decodeIfPresent(String.self, forKey: .provisioningProfileId)
-            self = mutable
-            return
-        }
 
         let name = try container.decode(String.self, forKey: .name)
         let uuidString = try container.decode(String.self, forKey: .uuid)

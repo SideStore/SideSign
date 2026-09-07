@@ -167,16 +167,75 @@ struct AppGroupResponse: Decodable, Sendable {
     let resultString: String?
 }
 
+struct AppIDPayload: Decodable, Sendable {
+    let appIdId: String?
+    let identifier: String?
+    let prefix: String?
+    let name: String?
+}
+
+struct ProvisioningProfileDetails: Decodable, Sendable {
+    let provisioningProfileId: String?
+    let name: String?
+    let status: String?
+    let type: String?
+    let uuid: String?
+    let dateExpire: Date?
+    let appId: AppIDPayload?
+    let deviceIds: [String]?
+    let isFreeProvisioningProfile: Bool?
+    let encodedProfile: Data?
+
+    enum CodingKeys: String, CodingKey {
+        case provisioningProfileId
+        case name
+        case status
+        case type
+        case uuid = "UUID"
+        case dateExpire
+        case appId
+        case deviceIds
+        case isFreeProvisioningProfile
+        case encodedProfile
+    }
+
+    func toProvisioningProfile() -> ProvisioningProfile? {
+        if let encodedProfile, let profile = ProvisioningProfile(data: encodedProfile) {
+            var mutable = profile
+            mutable.identifier = provisioningProfileId
+            return mutable
+        }
+
+        guard let name, let uuidStr = uuid, let uuidVal = UUID(uuidString: uuidStr), let dateExpire else {
+            return nil
+        }
+
+        return ProvisioningProfile(
+            name: name,
+            uuid: uuidVal,
+            bundleIdentifier: appId?.identifier ?? "",
+            teamIdentifier: appId?.prefix ?? "",
+            teamName: "",
+            creationDate: Date(),
+            expirationDate: dateExpire,
+            deviceIDs: deviceIds ?? [],
+            isFreeProvisioningProfile: isFreeProvisioningProfile ?? false,
+            data: Data(),
+            identifier: provisioningProfileId
+        )
+    }
+}
+
 struct ListProfilesResponse: Decodable, Sendable {
     let resultCode: Int?
-    let provisioningProfiles: [ProvisioningProfile]?
+    let provisioningProfiles: [ProvisioningProfileDetails]?
     let userString: String?
     let resultString: String?
 }
 
 struct DownloadProfileResponse: Decodable, Sendable {
     let resultCode: Int?
-    let provisioningProfile: ProvisioningProfile?
+    let provisioningProfile: ProvisioningProfileDetails?
     let userString: String?
     let resultString: String?
 }

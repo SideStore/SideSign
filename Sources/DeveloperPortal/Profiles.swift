@@ -16,7 +16,7 @@ public extension DeveloperPortal {
 
         let response: ListProfilesResponse = try await sendRequest(url: Constants.URLs.listProvisioningProfiles, session: session, team: team)
 
-        let profiles = response.provisioningProfiles ?? []
+        let profiles = response.provisioningProfiles?.compactMap { $0.toProvisioningProfile() } ?? []
 
         debugLog("[SideSign] fetchProvisioningProfiles completed with \(profiles.count) profile(s)")
         if !profiles.isEmpty {
@@ -54,7 +54,7 @@ public extension DeveloperPortal {
             }
         )
 
-        guard let downloadedProfile = response.provisioningProfile else {
+        guard let downloadedProfile = response.provisioningProfile?.toProvisioningProfile() else {
             debugLog("[SideSign] downloadProvisioningProfile error: Missing provisioning profile in download response")
             throw ServerError.badServerResponse(reason: "Missing provisioning profile in download response", jsonPayload: "")
         }
