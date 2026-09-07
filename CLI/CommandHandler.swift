@@ -619,13 +619,15 @@ public enum CommandHandler {
                 return false
             }
 
+            let customHeaders = anisetteDeviceUDID != nil ? AnisetteHeaders().with { $0.deviceID = anisetteDeviceUDID } : nil
+
             if enableFailover {
                 let res = try await provider.fetchAnisetteDataWithFailover(
                     servers: failoverURLs,
                     startIndex: startIndex,
                     identifier: identifier,
                     existingAdiBlob: existingData?.adiBlob,
-                    customDeviceID: anisetteDeviceUDID,
+                    headers: customHeaders,
                     onError: errorHandler,
                     onSuccess: { @Sendable winURL in
                         if !outputJSON {
@@ -639,7 +641,7 @@ public enum CommandHandler {
                 let res = try await provider.fetchAnisetteData(
                     identifier: identifier,
                     existingAdiBlob: existingData?.adiBlob,
-                    customDeviceID: anisetteDeviceUDID,
+                    headers: customHeaders,
                     onError: errorHandler
                 )
                 data = res.data

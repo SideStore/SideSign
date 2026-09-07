@@ -331,72 +331,13 @@ public actor AnisetteDataManager {
 
     public static func parseAnisetteData(
         from dictionary: [String: String],
-        defaultDeviceID: String = UUID().uuidString,
-        defaultClientInfo: String = AnisetteConstants.defaultClientInfo,
-        defaultLocalUserID: String = "0",
-        defaultLocale: Locale = .current,
-        defaultTimeZone: TimeZone = .current
+        defaultDeviceID: String? = nil
     ) throws -> AnisetteData {
-        var map = [String: String]()
-        for (k, v) in dictionary {
-            map[k.lowercased()] = v
-        }
-
-        guard
-            let machineID = map["machineid"] ?? map["x-apple-i-md-m"],
-            let otp = map["onetimepassword"] ?? map["x-apple-i-md"],
-            let routingInfoString = map["routinginfo"] ?? map["x-apple-i-md-rinfo"],
-            let routingInfo = UInt64(routingInfoString)
-        else {
+        let headers = AnisetteHeadersDTO.toHeaders(from: dictionary)
+        guard let anisetteData = AnisetteData(headers: headers, defaultDeviceID: defaultDeviceID) else {
             throw AnisetteError.invalidAnisetteData
         }
-
-        let localUserID = map["localuserid"] ?? map["x-apple-i-md-lu"] ?? defaultLocalUserID
-        let serial = map["deviceserialnumber"] ?? map["x-apple-i-srl-no"] ?? "0"
-        let deviceUID = map["deviceuniqueidentifier"] ?? map["x-mme-device-id"] ?? defaultDeviceID
-        let desc = map["devicedescription"] ?? map["x-mme-client-info"] ?? defaultClientInfo
-
-        let date: Date
-        if let dateString = map["date"] ?? map["x-apple-i-client-time"] {
-            if let isoDate = ISO8601DateFormatter().date(from: dateString) {
-                date = isoDate
-            } else {
-                let df = DateFormatter()
-                df.locale = Locale(identifier: "en_US_POSIX")
-                df.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
-                date = df.date(from: dateString) ?? Date()
-            }
-        } else {
-            date = Date()
-        }
-
-        let locale: Locale
-        if let localeID = map["locale"] ?? map["x-apple-locale"] {
-            let cleanLocaleID = localeID.components(separatedBy: "@").first ?? localeID
-            locale = Locale(identifier: cleanLocaleID)
-        } else {
-            locale = defaultLocale
-        }
-
-        let tz: TimeZone
-        if let tzID = map["timezone"] ?? map["x-apple-i-timezone"] {
-            tz = TimeZone(abbreviation: tzID) ?? TimeZone(identifier: tzID) ?? defaultTimeZone
-        } else {
-            tz = defaultTimeZone
-        }
-
-        return AnisetteData(
-            machineID: machineID,
-            oneTimePassword: otp,
-            localUserID: localUserID,
-            routingInfo: routingInfo,
-            deviceUniqueIdentifier: deviceUID,
-            deviceSerialNumber: serial,
-            deviceDescription: desc,
-            date: date,
-            locale: locale,
-            timeZone: tz
-        )
+        return anisetteData
     }
 
     public static func safeTimeZoneAbbreviation(for timeZone: TimeZone, date: Date = Date()) -> String {
@@ -404,33 +345,13 @@ public actor AnisetteDataManager {
     }
 
     public static func toHTTPHeaders(data: AnisetteData) -> [String: String] {
-        let formatter = ISO8601DateFormatter()
-        return [
-            "X-Apple-I-MD-M": data.machineID,
-            "X-Apple-I-MD": data.oneTimePassword,
-            "X-Apple-I-MD-LU": data.localUserID,
-            "X-Apple-I-MD-RINFO": String(data.routingInfo),
-            "X-Mme-Device-Id": data.deviceUniqueIdentifier,
-            "X-Apple-I-SRL-NO": data.deviceSerialNumber,
-            "X-Mme-Client-Info": data.deviceDescription,
-            "X-Apple-I-Client-Time": formatter.string(from: data.date),
-            "X-Apple-Locale": data.locale.identifier.components(separatedBy: "@").first ?? "en_US",
-            "X-Apple-I-TimeZone": safeTimeZoneAbbreviation(for: data.timeZone, date: data.date)
-        ]
+        AnisetteHeadersDTO.toDictionary(from: data.headers)
     }
 
     public func fetchAnisetteData(
         mode: AnisetteMode? = nil,
-        identifier: UUID = UUID(),
+        identifier: UUID,
         existingAdiBlob: Data? = nil,
-        clientInfo: String = AnisetteConstants.defaultClientInfo,
-        customLocalUserID: String? = nil,
-        customDeviceID: String? = nil,
-        customLocale: Locale = .current,
-        customTimeZone: TimeZone = .current,
-        customRoutingInfo: String? = nil,
-        customSerialNumber: String? = nil,
-        customDate: Date? = nil,
         headers: AnisetteHeaders? = nil,
         onError: (@Sendable (Error) async throws -> Bool)? = nil
     ) async throws -> (data: AnisetteData, newAdiBlob: Data?) {
@@ -438,196 +359,71 @@ public actor AnisetteDataManager {
             throw AnisetteError.modeNotConfigured
         }
 
-        var resolvedHeaders = headers ?? AnisetteHeaders()
-        if resolvedHeaders.deviceID == nil {
-            resolvedHeaders.deviceID = customDeviceID ?? identifier.uuidString.uppercased()
-        }
-        if resolvedHeaders.clientInfo == nil {
-            resolvedHeaders.clientInfo = clientInfo
-        }
-        if resolvedHeaders.localUserID == nil {
-            resolvedHeaders.localUserID = customLocalUserID
-        }
-        if resolvedHeaders.routingInfo == nil {
-            resolvedHeaders.routingInfo = customRoutingInfo
-        }
-        if resolvedHeaders.serialNumber == nil {
-            resolvedHeaders.serialNumber = customSerialNumber
-        }
-        if resolvedHeaders.date == nil {
-            resolvedHeaders.date = customDate
-        }
-        if resolvedHeaders.locale == nil {
-            resolvedHeaders.locale = customLocale.identifier.components(separatedBy: "@").first
-        }
-        if resolvedHeaders.timeZone == nil {
-            resolvedHeaders.timeZone = safeTimeZoneAbbreviation(for: customTimeZone)
-        }
+        let effectiveHeaders = headers ?? AnisetteHeaders.defaultHeaders
+        let clientInfo = effectiveHeaders.clientInfo ?? AnisetteConstants.defaultClientInfo
+        let (client, provider) = try await getClient(for: resolvedMode, clientInfo: clientInfo)
 
-        switch resolvedMode {
+        do {
+            let (rawHeaders, newBlob) = try await client.getHeaders(
+                identifier: identifier,
+                storage: .memory(existingBlob: existingAdiBlob),
+                headers: effectiveHeaders,
+                provider: provider
+            )
+
+            guard let anisetteData = AnisetteData(headers: AnisetteHeaders(rawHeaders: rawHeaders), defaultDeviceID: identifier.uuidString.uppercased()) else {
+                throw AnisetteError.invalidAnisetteData
+            }
+
+            return (anisetteData, newBlob)
+        } catch {
+            if let errorHandler = onError {
+                let shouldContinue = try await errorHandler(error)
+                guard shouldContinue else {
+                    throw error
+                }
+            }
+            throw error
+        }
+    }
+
+    private func getClient(for mode: AnisetteMode, clientInfo: String) async throws -> (client: AnisetteClient, provider: (any AnisetteDataProvider)?) {
+        switch mode {
         case .remote(let server):
-            let effectiveDeviceID = resolvedHeaders.deviceID ?? customDeviceID ?? identifier.uuidString
-            let remoteProvider = RemoteAnisetteDataProvider(serverURL: server)
+            try FileManager.default.createDirectory(at: provisioningDir, withIntermediateDirectories: true)
             let client = try AnisetteClient(
                 provisioningDir: provisioningDir,
-                clientInfo: resolvedHeaders.clientInfo ?? clientInfo
-            ) {
-                self.libsDir
-            }
-
-            do {
-                let (rawHeaders, newBlob) = try await client.getHeaders(
-                    identifier: identifier,
-                    storage: .memory(existingBlob: existingAdiBlob),
-                    headers: resolvedHeaders,
-                    provider: remoteProvider
-                )
-
-                let anisetteData = try Self.parseAnisetteData(
-                    from: rawHeaders,
-                    defaultDeviceID: effectiveDeviceID,
-                    defaultClientInfo: resolvedHeaders.clientInfo ?? clientInfo,
-                    defaultLocale: customLocale,
-                    defaultTimeZone: customTimeZone
-                )
-                return (anisetteData, newBlob)
-            } catch {
-                if let errorHandler = onError {
-                    let shouldContinue = try await errorHandler(error)
-                    guard shouldContinue else {
-                        throw error
-                    }
-                }
-                throw error
-            }
+                clientInfo: clientInfo,
+                libraryDirectoryResolver: { self.libsDir }
+            )
+            return (client, RemoteAnisetteDataProvider(serverURL: server))
 
         case .localODA(let libDir, let prov):
             let targetProvDir = prov ?? provisioningDir
             try FileManager.default.createDirectory(at: targetProvDir, withIntermediateDirectories: true)
-            let provider = try AnisetteClient(
+            let client = try AnisetteClient(
                 provisioningDir: targetProvDir,
-                clientInfo: resolvedHeaders.clientInfo ?? clientInfo,
+                clientInfo: clientInfo,
                 libraryDirectoryResolver: { libDir }
             )
-
-            let (headers, newAdiPb) = try await provider.getHeaders(
-                identifier: identifier,
-                storage: .memory(existingBlob: existingAdiBlob),
-                headers: resolvedHeaders
-            )
-            guard let machineID = headers["X-Apple-I-MD-M"],
-                  let oneTimePassword = headers["X-Apple-I-MD"],
-                  let routingInfoStr = headers["X-Apple-I-MD-RINFO"],
-                  let routingInfo = UInt64(routingInfoStr),
-                  let localUserID = headers["X-Apple-I-MD-LU"] ?? resolvedHeaders.localUserID else {
-                throw AnisetteError.invalidAnisetteData
-            }
-
-            let serial = headers["X-Apple-I-SRL-NO"] ?? resolvedHeaders.serialNumber ?? "0"
-            let deviceUID = headers["X-Mme-Device-Id"] ?? resolvedHeaders.deviceID ?? identifier.uuidString.uppercased()
-
-            let effectiveTimeZone: TimeZone = {
-                if let tzStr = headers["X-Apple-I-TimeZone"],
-                   let parsed = TimeZone(abbreviation: tzStr) ?? TimeZone(identifier: tzStr) {
-                    return parsed
-                }
-                let safeAbbr = safeTimeZoneAbbreviation(for: customTimeZone)
-                return TimeZone(abbreviation: safeAbbr) ?? TimeZone(identifier: "UTC") ?? customTimeZone
-            }()
-
-            let parsedDate: Date = {
-                if let dateStr = headers["X-Apple-I-Client-Time"],
-                   let parsed = ISO8601DateFormatter().date(from: dateStr) {
-                    return parsed
-                }
-                return resolvedHeaders.date ?? Date()
-            }()
-
-            let anisetteData = AnisetteData(
-                machineID: machineID,
-                oneTimePassword: oneTimePassword,
-                localUserID: localUserID,
-                routingInfo: routingInfo,
-                deviceUniqueIdentifier: deviceUID,
-                deviceSerialNumber: serial,
-                deviceDescription: headers["X-Mme-Client-Info"] ?? resolvedHeaders.clientInfo ?? clientInfo,
-                date: parsedDate,
-                locale: customLocale,
-                timeZone: effectiveTimeZone
-            )
-            return (anisetteData, newAdiPb)
+            return (client, nil)
 
         case .remoteODA(let sourceURL, let fallbackURL):
             try FileManager.default.createDirectory(at: libsDir, withIntermediateDirectories: true)
             try FileManager.default.createDirectory(at: provisioningDir, withIntermediateDirectories: true)
             if !AnisetteClient.validateLibrariesExist(at: libsDir) {
-                try await setupFromRemote(serverSourceURL: sourceURL, fallbackODAURL: fallbackURL, clientInfo: resolvedHeaders.clientInfo ?? clientInfo)
+                try await setupFromRemote(serverSourceURL: sourceURL, fallbackODAURL: fallbackURL, clientInfo: clientInfo)
             }
-
-            let provider = try await ensureProviderLoaded(clientInfo: resolvedHeaders.clientInfo ?? clientInfo)
-            let (headers, newAdiPb) = try await provider.getHeaders(
-                identifier: identifier,
-                storage: .memory(existingBlob: existingAdiBlob),
-                headers: resolvedHeaders
-            )
-
-            guard let machineID = headers["X-Apple-I-MD-M"],
-                  let oneTimePassword = headers["X-Apple-I-MD"],
-                  let routingInfoStr = headers["X-Apple-I-MD-RINFO"],
-                  let routingInfo = UInt64(routingInfoStr),
-                  let localUserID = headers["X-Apple-I-MD-LU"] ?? resolvedHeaders.localUserID else {
-                throw AnisetteError.invalidAnisetteData
-            }
-
-            let serial = headers["X-Apple-I-SRL-NO"] ?? resolvedHeaders.serialNumber ?? "0"
-            let deviceUID = headers["X-Mme-Device-Id"] ?? resolvedHeaders.deviceID ?? identifier.uuidString.uppercased()
-
-            let effectiveTimeZone: TimeZone = {
-                if let tzStr = headers["X-Apple-I-TimeZone"],
-                   let parsed = TimeZone(abbreviation: tzStr) ?? TimeZone(identifier: tzStr) {
-                    return parsed
-                }
-                let safeAbbr = safeTimeZoneAbbreviation(for: customTimeZone)
-                return TimeZone(abbreviation: safeAbbr) ?? TimeZone(identifier: "UTC") ?? customTimeZone
-            }()
-
-            let parsedDate: Date = {
-                if let dateStr = headers["X-Apple-I-Client-Time"],
-                   let parsed = ISO8601DateFormatter().date(from: dateStr) {
-                    return parsed
-                }
-                return resolvedHeaders.date ?? Date()
-            }()
-
-            let anisetteData = AnisetteData(
-                machineID: machineID,
-                oneTimePassword: oneTimePassword,
-                localUserID: localUserID,
-                routingInfo: routingInfo,
-                deviceUniqueIdentifier: deviceUID,
-                deviceSerialNumber: serial,
-                deviceDescription: headers["X-Mme-Client-Info"] ?? resolvedHeaders.clientInfo ?? clientInfo,
-                date: parsedDate,
-                locale: customLocale,
-                timeZone: effectiveTimeZone
-            )
-            return (anisetteData, newAdiPb)
+            let client = try await ensureProviderLoaded(clientInfo: clientInfo)
+            return (client, nil)
         }
     }
 
     public func fetchAnisetteDataWithFailover(
         servers: [URL],
         startIndex: Int = 0,
-        identifier: UUID = UUID(),
+        identifier: UUID,
         existingAdiBlob: Data? = nil,
-        clientInfo: String = AnisetteConstants.defaultClientInfo,
-        customLocalUserID: String? = nil,
-        customDeviceID: String? = nil,
-        customLocale: Locale = .current,
-        customTimeZone: TimeZone = .current,
-        customRoutingInfo: String? = nil,
-        customSerialNumber: String? = nil,
-        customDate: Date? = nil,
         headers: AnisetteHeaders? = nil,
         onError: (@Sendable (Error) async throws -> Bool)? = nil,
         onSuccess: (@Sendable (URL) -> Void)? = nil
@@ -651,14 +447,6 @@ public actor AnisetteDataManager {
                     mode: .remote(server: serverURL),
                     identifier: identifier,
                     existingAdiBlob: existingAdiBlob,
-                    clientInfo: clientInfo,
-                    customLocalUserID: customLocalUserID,
-                    customDeviceID: customDeviceID,
-                    customLocale: customLocale,
-                    customTimeZone: customTimeZone,
-                    customRoutingInfo: customRoutingInfo,
-                    customSerialNumber: customSerialNumber,
-                    customDate: customDate,
                     headers: headers,
                     onError: onError
                 )
@@ -689,244 +477,6 @@ public actor AnisetteDataManager {
         return try decoder.decode(AnisetteServerData.self, from: data)
     }
 
-    private func fetchV3Headers(
-        server: URL,
-        identifier: String,
-        adiBlob: Data,
-        clientInfo: String,
-        customLocalUserID: String? = nil,
-        customLocale: Locale,
-        customTimeZone: TimeZone
-    ) async throws -> (AnisetteData, Data?) {
-        let baseURL = server.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let v3HeadersURL = URL(string: "\(baseURL)/\(Constants.URLs.v3GetHeaders)") else {
-            throw AnisetteError.invalidURL
-        }
-        var postReq = URLRequest(url: v3HeadersURL)
-        postReq.timeoutInterval = 15
-        postReq.httpMethod = "POST"
-        postReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        postReq.cachePolicy = .reloadIgnoringLocalCacheData
-        let cleanIdentifier = identifier.replacingOccurrences(of: "-", with: "")
-        let payload: [String: String] = [
-            "identifier": cleanIdentifier,
-            "adi_pb": adiBlob.base64EncodedString()
-        ]
-        postReq.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        let (data, response) = try await URLSession.shared.data(for: postReq)
-        guard let httpResp = response as? HTTPURLResponse, httpResp.isSuccess,
-              let json = try JSONSerialization.jsonObject(with: data) as? [String: String] else {
-            throw AnisetteError.invalidAnisetteData
-        }
-
-        if let result = json["result"], result == "GetHeadersError" {
-            let msg = json["message"] ?? "GetHeadersError"
-            throw AnisetteError.badServerResponse(statusCode: -1, payload: msg)
-        }
-
-        let anisette = try Self.parseAnisetteData(
-            from: json,
-            defaultDeviceID: identifier,
-            defaultClientInfo: clientInfo,
-            defaultLocalUserID: customLocalUserID ?? "0",
-            defaultLocale: customLocale,
-            defaultTimeZone: customTimeZone
-        )
-        return (anisette, nil)
-    }
-
-    private func runRemoteProvisioningSession(
-        server: URL,
-        identifier: UUID,
-        clientInfo: String
-    ) async throws -> Data {
-        let baseURL = server.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let clientInfoURL = URL(string: "\(baseURL)/\(Constants.URLs.v3ClientInfo)") else {
-            throw AnisetteError.invalidURL
-        }
-
-        verboseLog("[Anisette-WebSocket] Fetching client info from \(clientInfoURL.absoluteString)...")
-        var clientInfoReq = URLRequest(url: clientInfoURL)
-        clientInfoReq.cachePolicy = .reloadIgnoringLocalCacheData
-        clientInfoReq.timeoutInterval = 10
-        let (clientInfoData, clientInfoResp) = try await URLSession.shared.data(for: clientInfoReq)
-        guard let httpResp = clientInfoResp as? HTTPURLResponse, httpResp.isSuccess,
-              let clientInfoJSON = try? JSONSerialization.jsonObject(with: clientInfoData) as? [String: Any] else {
-            throw AnisetteError.badServerResponse(statusCode: (clientInfoResp as? HTTPURLResponse)?.safeStatusCode ?? -1, payload: "Failed to fetch client_info from remote server")
-        }
-
-        let resolvedClientInfo = clientInfoJSON["client_info"] as? String ?? clientInfo
-        let userAgent = clientInfoJSON["user_agent"] as? String ?? Constants.Anisette.defaultUserAgent
-        let mdLu = clientInfoJSON["md_lu"] as? String ?? Constants.Anisette.defaultMdLu
-        let mdRinfo = clientInfoJSON["md_rinfo"] as? String ?? Constants.Anisette.defaultMdRinfo
-
-        var req = URLRequest(url: Constants.URLs.grandSlamLookup)
-        req.httpMethod = "GET"
-        req.setValue("text/x-xml-plist", forHTTPHeaderField: "Content-Type")
-        req.setValue(resolvedClientInfo, forHTTPHeaderField: "X-Mme-Client-Info")
-        req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        req.setValue(identifier.uuidString.uppercased(), forHTTPHeaderField: "X-Mme-Device-Id")
-        if !mdLu.isEmpty {
-            req.setValue(mdLu, forHTTPHeaderField: "X-Apple-I-MD-LU")
-        }
-        req.setValue(mdRinfo, forHTTPHeaderField: "X-Apple-I-MD-RINFO")
-
-        verboseLog("[Anisette-WebSocket] Fetching Apple provisioning URLs from GSA...")
-        let (lookupData, lookupResp) = try await URLSession.shared.data(for: req)
-        guard let gsaResp = lookupResp as? HTTPURLResponse, gsaResp.isSuccess,
-              let plist = try PropertyListSerialization.propertyList(from: lookupData, options: [], format: nil) as? [String: Any],
-              let urls = plist["urls"] as? [String: String],
-              let startURLString = urls["midStartProvisioning"],
-              let startURL = URL(string: startURLString),
-              let endURLString = urls["midFinishProvisioning"],
-              let endURL = URL(string: endURLString) else {
-            let status = (lookupResp as? HTTPURLResponse)?.safeStatusCode ?? -1
-            let payload = String(data: lookupData, encoding: .utf8) ?? ""
-            throw AnisetteError.badServerResponse(statusCode: status, payload: "Failed to parse Apple provisioning URLs from GSA lookup: \(payload)")
-        }
-
-        guard let httpURL = URL(string: "\(baseURL)/\(Constants.URLs.v3ProvisioningSession)"),
-              var webSocketComponents = URLComponents(url: httpURL, resolvingAgainstBaseURL: true) else {
-            throw AnisetteError.invalidURL
-        }
-        webSocketComponents.scheme = (webSocketComponents.scheme == "http") ? "ws" : "wss"
-        guard let webSocketURL = webSocketComponents.url else {
-            throw AnisetteError.invalidURL
-        }
-
-        verboseLog("[Anisette-WebSocket] Connecting to WebSocket: \(webSocketURL.absoluteString)...")
-        let webSocketTask = URLSession.shared.webSocketTask(with: webSocketURL)
-        webSocketTask.resume()
-        defer {
-            webSocketTask.cancel(with: .normalClosure, reason: nil)
-        }
-
-        let cleanIdentifier = identifier.uuidString.replacingOccurrences(of: "-", with: "")
-
-        while true {
-            let json = try await receiveWebSocketJSON(from: webSocketTask)
-            guard let result = json["result"] as? String else {
-                throw AnisetteError.badServerResponse(statusCode: -1, payload: "Missing result in WebSocket response")
-            }
-
-            verboseLog("[Anisette-WebSocket] Step: \(result)")
-
-            switch result {
-            case "GiveIdentifier":
-                try await sendWebSocketJSON(["identifier": cleanIdentifier], to: webSocketTask)
-
-            case "GiveStartProvisioningData":
-                let body: [String: Any] = [
-                    "Header": [String: Any](),
-                    "Request": [String: Any]()
-                ]
-                let resPlist = try await postAppleGSA(
-                    url: startURL,
-                    body: body,
-                    clientInfo: resolvedClientInfo,
-                    userAgent: userAgent,
-                    deviceId: cleanIdentifier.uppercased(),
-                    mdLu: mdLu,
-                    mdRinfo: mdRinfo
-                )
-                guard let responseDict = resPlist["Response"] as? [String: Any],
-                      let spim = responseDict["spim"] as? String else {
-                    throw AnisetteError.badServerResponse(statusCode: -1, payload: "Missing spim from Apple start provisioning")
-                }
-                try await sendWebSocketJSON(["spim": spim], to: webSocketTask)
-
-            case "GiveEndProvisioningData":
-                guard let cpim = json["cpim"] as? String else {
-                    throw AnisetteError.badServerResponse(statusCode: -1, payload: "Missing cpim from server")
-                }
-                let body: [String: Any] = [
-                    "Header": [String: Any](),
-                    "Request": ["cpim": cpim]
-                ]
-                let resPlist = try await postAppleGSA(
-                    url: endURL,
-                    body: body,
-                    clientInfo: resolvedClientInfo,
-                    userAgent: userAgent,
-                    deviceId: cleanIdentifier.uppercased(),
-                    mdLu: mdLu,
-                    mdRinfo: mdRinfo
-                )
-                guard let responseDict = resPlist["Response"] as? [String: Any],
-                      let ptm = responseDict["ptm"] as? String,
-                      let tk = responseDict["tk"] as? String else {
-                    throw AnisetteError.badServerResponse(statusCode: -1, payload: "Missing ptm/tk from Apple end provisioning")
-                }
-                try await sendWebSocketJSON(["ptm": ptm, "tk": tk], to: webSocketTask)
-
-            case "ProvisioningSuccess":
-                guard let adiPbStr = json["adi_pb"] as? String,
-                      let adiPbData = Data(base64Encoded: adiPbStr), !adiPbData.isEmpty else {
-                    throw AnisetteError.badServerResponse(statusCode: -1, payload: "Missing/invalid adi_pb in ProvisioningSuccess")
-                }
-                verboseLog("[Anisette-WebSocket] ProvisioningSuccess! Received adi.pb (\(adiPbData.count) bytes)")
-                return adiPbData
-
-            default:
-                let msg = json["message"] as? String ?? result
-                throw AnisetteError.badServerResponse(statusCode: -1, payload: "Remote provisioning error: \(msg)")
-            }
-        }
-    }
-
-    private func sendWebSocketJSON(_ dict: [String: String], to webSocketTask: URLSessionWebSocketTask) async throws {
-        let data = try JSONSerialization.data(withJSONObject: dict)
-        let str = String(data: data, encoding: .utf8) ?? ""
-        try await webSocketTask.send(.string(str))
-    }
-
-    private func receiveWebSocketJSON(from webSocketTask: URLSessionWebSocketTask) async throws -> [String: Any] {
-        let msg = try await webSocketTask.receive()
-        let str: String
-        switch msg {
-        case .string(let s):
-            str = s
-        case .data(let d):
-            str = String(data: d, encoding: .utf8) ?? ""
-        @unknown default:
-            str = ""
-        }
-        guard let jsonData = str.data(using: .utf8),
-              let json = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-            throw AnisetteError.invalidAnisetteData
-        }
-        return json
-    }
-
-    private func postAppleGSA(
-        url: URL,
-        body: [String: Any],
-        clientInfo: String,
-        userAgent: String,
-        deviceId: String,
-        mdLu: String,
-        mdRinfo: String
-    ) async throws -> [String: Any] {
-        var appleReq = URLRequest(url: url)
-        appleReq.httpMethod = "POST"
-        appleReq.setValue("text/x-xml-plist", forHTTPHeaderField: "Content-Type")
-        appleReq.setValue(clientInfo, forHTTPHeaderField: "X-Mme-Client-Info")
-        appleReq.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        appleReq.setValue(deviceId, forHTTPHeaderField: "X-Mme-Device-Id")
-        if !mdLu.isEmpty {
-            appleReq.setValue(mdLu, forHTTPHeaderField: "X-Apple-I-MD-LU")
-        }
-        appleReq.setValue(mdRinfo, forHTTPHeaderField: "X-Apple-I-MD-RINFO")
-        appleReq.httpBody = try PropertyListSerialization.data(fromPropertyList: body, format: .xml, options: 0)
-        let (data, appleResp) = try await URLSession.shared.data(for: appleReq)
-        guard let resPlist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] else {
-            let status = (appleResp as? HTTPURLResponse)?.statusCode ?? -1
-            let payload = String(data: data, encoding: .utf8) ?? ""
-            throw AnisetteError.badServerResponse(statusCode: status, payload: "Invalid plist from Apple GSA: \(payload)")
-        }
-        return resPlist
-    }
-
     public func fetchODAInfo(from serverSourceURL: URL, fallbackODAURL: URL? = nil) async throws -> ODAInfo {
         var request = URLRequest(url: serverSourceURL)
         request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -950,42 +500,27 @@ public actor AnisetteDataManager {
             return directInfo
 
         case .path(let pathString):
-            let targetURL: URL
-            if let direct = URL(string: pathString), direct.scheme != nil {
-                targetURL = direct
-            } else if let relative = URL(string: pathString, relativeTo: serverSourceURL)?.absoluteURL {
-                targetURL = relative
-            } else if let fallback = fallbackODAURL {
-                targetURL = fallback
-            } else {
-                throw AnisetteError.missingODAEntry
-            }
-
-            var odaReq = URLRequest(url: targetURL)
-            odaReq.cachePolicy = .reloadIgnoringLocalCacheData
-            let (odaData, odaResp) = try await URLSession.shared.data(for: odaReq)
-            guard let httpOdaResp = odaResp as? HTTPURLResponse, httpOdaResp.isSuccess else {
-                let status = (odaResp as? HTTPURLResponse)?.safeStatusCode ?? -1
-                throw AnisetteError.downloadFailed("ODA metadata request failed with HTTP \(status)")
-            }
-
-            return try decoder.decode(ODAInfo.self, from: odaData)
+            let targetURL = (URL(string: pathString)?.scheme != nil ? URL(string: pathString) : URL(string: pathString, relativeTo: serverSourceURL)?.absoluteURL) ?? fallbackODAURL
+            guard let url = targetURL else { throw AnisetteError.missingODAEntry }
+            return try await fetchODAData(from: url)
 
         case .none:
             guard let fallbackURL = fallbackODAURL else {
                 throw AnisetteError.missingODAEntry
             }
-
-            var odaReq = URLRequest(url: fallbackURL)
-            odaReq.cachePolicy = .reloadIgnoringLocalCacheData
-            let (odaData, odaResp) = try await URLSession.shared.data(for: odaReq)
-            guard let httpOdaResp = odaResp as? HTTPURLResponse, httpOdaResp.isSuccess else {
-                let status = (odaResp as? HTTPURLResponse)?.safeStatusCode ?? -1
-                throw AnisetteError.downloadFailed("Fallback ODA metadata request failed with HTTP \(status)")
-            }
-
-            return try decoder.decode(ODAInfo.self, from: odaData)
+            return try await fetchODAData(from: fallbackURL)
         }
+    }
+
+    private func fetchODAData(from url: URL) async throws -> ODAInfo {
+        var odaReq = URLRequest(url: url)
+        odaReq.cachePolicy = .reloadIgnoringLocalCacheData
+        let (odaData, odaResp) = try await URLSession.shared.data(for: odaReq)
+        guard let httpOdaResp = odaResp as? HTTPURLResponse, httpOdaResp.isSuccess else {
+            let status = (odaResp as? HTTPURLResponse)?.safeStatusCode ?? -1
+            throw AnisetteError.downloadFailed("ODA metadata request failed with HTTP \(status)")
+        }
+        return try JSONDecoder().decode(ODAInfo.self, from: odaData)
     }
 
     public func downloadAndCacheLibs(from oda: ODAInfo, targetDirectory: URL? = nil, clientInfo: String = AnisetteConstants.defaultClientInfo) async throws {
@@ -998,44 +533,14 @@ public actor AnisetteDataManager {
         isCaching = true
         defer { isCaching = false }
 
-        let libDir: URL
-        if let target = targetDirectory {
-            libDir = target
-            debugLog("[AnisetteDataManager] Using custom target directory for libraries: \(libDir.path)")
-        } else {
-            libDir = remoteLibsDir
-            debugLog("[AnisetteDataManager] Using default remote libraries directory: \(libDir.path)")
-        }
+        let libDir = targetDirectory ?? remoteLibsDir
         let prov = provisioningDir
-
         let fm = FileManager.default
+
         try fm.createDirectory(at: libDir, withIntermediateDirectories: true)
         try fm.createDirectory(at: prov, withIntermediateDirectories: true)
 
-        let zipData: Data
-        if let inlineBase64 = oda.base64Payload,
-           let decoded = Data(base64Encoded: inlineBase64.trimmingCharacters(in: .whitespacesAndNewlines), options: .ignoreUnknownCharacters) {
-            zipData = decoded
-        } else if let urlStr = oda.url, let downloadURL = URL(string: urlStr) {
-            var request = URLRequest(url: downloadURL)
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            let (downloadedData, response) = try await URLSession.shared.data(for: request)
-
-            guard let httpResp = response as? HTTPURLResponse, httpResp.isSuccess else {
-                let status = (response as? HTTPURLResponse)?.safeStatusCode ?? -1
-                throw AnisetteError.downloadFailed("Package download failed with HTTP \(status)")
-            }
-
-            let rawString = String(data: downloadedData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let base64String = rawString,
-               let decoded = Data(base64Encoded: base64String, options: .ignoreUnknownCharacters) {
-                zipData = decoded
-            } else {
-                zipData = downloadedData
-            }
-        } else {
-            throw AnisetteError.downloadFailed("No valid URL or Base64 payload in ODA configuration.")
-        }
+        let zipData = try await resolveZipData(from: oda)
 
         if let expectedSHA = oda.sha256, !expectedSHA.isEmpty {
             let zipSHA = computeSHA256(data: zipData)
@@ -1054,14 +559,33 @@ public actor AnisetteDataManager {
             throw AnisetteError.missingRequiredLibs(AnisetteConstants.Libraries.requiredNames)
         }
 
-        let provider = try AnisetteClient(
+        self.localProvider = try AnisetteClient(
             provisioningDir: prov,
-            clientInfo: clientInfo
-        ) {
-            libDir
-        }
+            clientInfo: clientInfo,
+            libraryDirectoryResolver: { libDir }
+        )
+    }
 
-        self.localProvider = provider
+    private func resolveZipData(from oda: ODAInfo) async throws -> Data {
+        if let inlineBase64 = oda.base64Payload,
+           let decoded = Data(base64Encoded: inlineBase64.trimmingCharacters(in: .whitespacesAndNewlines), options: .ignoreUnknownCharacters) {
+            return decoded
+        }
+        guard let urlStr = oda.url, let downloadURL = URL(string: urlStr) else {
+            throw AnisetteError.downloadFailed("No valid URL or Base64 payload in ODA configuration.")
+        }
+        var request = URLRequest(url: downloadURL)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        let (downloadedData, response) = try await URLSession.shared.data(for: request)
+        guard let httpResp = response as? HTTPURLResponse, httpResp.isSuccess else {
+            let status = (response as? HTTPURLResponse)?.safeStatusCode ?? -1
+            throw AnisetteError.downloadFailed("Package download failed with HTTP \(status)")
+        }
+        if let rawString = String(data: downloadedData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           let decoded = Data(base64Encoded: rawString, options: .ignoreUnknownCharacters) {
+            return decoded
+        }
+        return downloadedData
     }
 
     public func setupFromRemote(serverSourceURL: URL, fallbackODAURL: URL? = nil, force: Bool = false, clientInfo: String = AnisetteConstants.defaultClientInfo) async throws {
@@ -1085,10 +609,9 @@ public actor AnisetteDataManager {
         if AnisetteClient.validateLibrariesExist(at: libDir) {
             let provider = try AnisetteClient(
                 provisioningDir: prov,
-                clientInfo: clientInfo
-            ) {
-                libDir
-            }
+                clientInfo: clientInfo,
+                libraryDirectoryResolver: { libDir }
+            )
             self.localProvider = provider
             return provider
         }

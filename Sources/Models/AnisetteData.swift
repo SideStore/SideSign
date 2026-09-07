@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import AnisetteKit
 
 public struct AnisetteData: Sendable, Codable, Equatable, Hashable {
     public var machineID: String
@@ -42,5 +43,40 @@ public struct AnisetteData: Sendable, Codable, Equatable, Hashable {
         self.date = date
         self.locale = locale
         self.timeZone = timeZone
+    }
+
+    public init?(headers: AnisetteHeaders, defaultDeviceID: String? = nil) {
+        guard let machineID = headers.machineID,
+              let otp = headers.oneTimePassword,
+              let routingInfoStr = headers.routingInfo,
+              let routingInfo = UInt64(routingInfoStr) else {
+            return nil
+        }
+
+        self.machineID = machineID
+        self.oneTimePassword = otp
+        self.localUserID = headers.localUserID ?? AnisetteConstants.defaultLocalUserID
+        self.routingInfo = routingInfo
+        self.deviceUniqueIdentifier = headers.deviceID ?? defaultDeviceID ?? ""
+        self.deviceSerialNumber = headers.serialNumber ?? AnisetteConstants.defaultSerialNumber
+        self.deviceDescription = headers.clientInfo ?? AnisetteConstants.defaultClientInfo
+        self.date = headers.date ?? Date()
+        self.locale = headers.locale.flatMap { Locale(identifier: $0) } ?? .current
+        self.timeZone = headers.timeZone.flatMap { TimeZone(abbreviation: $0) ?? TimeZone(identifier: $0) } ?? .current
+    }
+
+    public var headers: AnisetteHeaders {
+        AnisetteHeaders().with {
+            $0.machineID = machineID
+            $0.oneTimePassword = oneTimePassword
+            $0.localUserID = localUserID
+            $0.routingInfo = String(routingInfo)
+            $0.deviceID = deviceUniqueIdentifier
+            $0.serialNumber = deviceSerialNumber
+            $0.clientInfo = deviceDescription
+            $0.date = date
+            $0.locale = locale.identifier.components(separatedBy: "@").first ?? "en_US"
+            $0.timeZone = AnisetteKit.safeTimeZoneAbbreviation(for: timeZone, date: date)
+        }
     }
 }
