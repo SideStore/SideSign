@@ -877,6 +877,7 @@ public extension DeveloperPortal {
             "X-Apple-I-MD": a.oneTimePassword,
             "X-Apple-I-MD-M": a.machineID,
             "X-Mme-Device-Id": a.deviceID,
+            "X-MMe-Client-Info": a.clientInfo,
             "X-Apple-I-MD-LU": a.localUserID,
             "X-Apple-I-MD-RINFO": a.routingInfo,
             "X-Apple-I-SRL-NO": a.serialNumber,
