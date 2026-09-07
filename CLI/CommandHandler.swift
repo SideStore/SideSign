@@ -475,7 +475,7 @@ public enum CommandHandler {
                 throw CLIError.invalidArgument("Invalid server list URL: \(sourceURL)")
             }
             print("Fetching Anisette servers from \(url.absoluteString)...")
-            let provider = AnisetteDataProvider.shared
+            let provider = AnisetteDataManager.shared
             let data = try await provider.fetchServerList(from: url)
 
             print("\nAnisette Servers (\(data.servers.count)):")
@@ -510,7 +510,7 @@ public enum CommandHandler {
                 guard let sourceStr = sourceURLStr, let listURL = URL(string: sourceStr) else {
                     throw CLIError.missingRequiredArgument("--source <url> is required when using --failover.")
                 }
-                let serverData = try await AnisetteDataProvider.shared.fetchServerList(from: listURL)
+                let serverData = try await AnisetteDataManager.shared.fetchServerList(from: listURL)
                 let visible = serverData.servers.filter { !$0.isHidden }
                 failoverURLs = visible.compactMap { URL(string: $0.address) }
                 guard !failoverURLs.isEmpty else {
@@ -520,18 +520,18 @@ public enum CommandHandler {
             } else if let dir = localDir {
                 mode = .localODA(libsDir: URL(fileURLWithPath: dir))
             } else if let odaStr = odaURL, let oURL = URL(string: odaStr) {
-                try await AnisetteDataProvider.shared.setupFromRemote(serverSourceURL: oURL, force: forceODA)
-                mode = .localODA(libsDir: AnisetteDataProvider.shared.remoteLibsDir)
+                try await AnisetteDataManager.shared.setupFromRemote(serverSourceURL: oURL, force: forceODA)
+                mode = .localODA(libsDir: AnisetteDataManager.shared.remoteLibsDir)
             } else if let sUrl = serverURL, let url = URL(string: sUrl) {
                 if strict {
-                    let isValid = await AnisetteDataProvider.validateServer(url: url, strict: true)
+                    let isValid = await AnisetteDataManager.validateServer(url: url, strict: true)
                     guard isValid else {
                         throw CLIError.executionFailed("Strict validation failed for remote server '\(url.absoluteString)'. Endpoint is not ready or not returning valid Anisette payload.")
                     }
                 }
                 mode = .remote(server: url)
-            } else if AnisetteClient.validateLibrariesExist(at: AnisetteDataProvider.shared.libsDir) {
-                mode = .localODA(libsDir: AnisetteDataProvider.shared.libsDir)
+            } else if AnisetteClient.validateLibrariesExist(at: AnisetteDataManager.shared.libsDir) {
+                mode = .localODA(libsDir: AnisetteDataManager.shared.libsDir)
             } else {
                 throw CLIError.missingRequiredArgument("""
                 An Anisette mode is required. Specify one of:
@@ -590,7 +590,7 @@ public enum CommandHandler {
                 print()
             }
 
-            let provider = AnisetteDataProvider(mode: mode)
+            let provider = AnisetteDataManager(mode: mode)
             let identifier = existingData?.identifier ?? (anisetteDeviceUDID != nil ? UUID(uuidString: anisetteDeviceUDID!) : nil) ?? UUID()
             let data: AnisetteData
             let newAdiPb: Data?
@@ -668,7 +668,7 @@ public enum CommandHandler {
             }
 
             if asJSON {
-                let headers = AnisetteDataProvider.toHTTPHeaders(data: data)
+                let headers = AnisetteDataManager.toHTTPHeaders(data: data)
                 if let jsonData = try? JSONSerialization.data(withJSONObject: headers, options: .prettyPrinted),
                    let str = String(data: jsonData, encoding: .utf8) {
                     print(str)
@@ -1238,7 +1238,7 @@ public enum CommandHandler {
             guard let sourceStr = options.sourceURLStr, let listURL = URL(string: sourceStr) else {
                 throw CLIError.missingRequiredArgument("--source <url> is required when using --failover.")
             }
-            let serverData = try await AnisetteDataProvider.shared.fetchServerList(from: listURL)
+            let serverData = try await AnisetteDataManager.shared.fetchServerList(from: listURL)
             let visible = serverData.servers.filter { !$0.isHidden }
             failoverURLs = visible.compactMap { URL(string: $0.address) }
             guard !failoverURLs.isEmpty else {
@@ -1248,18 +1248,18 @@ public enum CommandHandler {
         } else if let dir = options.localAnisetteDir {
             mode = .localODA(libsDir: URL(fileURLWithPath: dir))
         } else if let odaStr = options.odaURL, let oURL = URL(string: odaStr) {
-            try await AnisetteDataProvider.shared.setupFromRemote(serverSourceURL: oURL, force: options.forceODA)
-            mode = .localODA(libsDir: AnisetteDataProvider.shared.remoteLibsDir)
+            try await AnisetteDataManager.shared.setupFromRemote(serverSourceURL: oURL, force: options.forceODA)
+            mode = .localODA(libsDir: AnisetteDataManager.shared.remoteLibsDir)
         } else if let sUrl = serverURL, let url = URL(string: sUrl) {
             if options.strict {
-                let isValid = await AnisetteDataProvider.validateServer(url: url, strict: true)
+                let isValid = await AnisetteDataManager.validateServer(url: url, strict: true)
                 guard isValid else {
                     throw CLIError.executionFailed("Strict validation failed for remote server '\(url.absoluteString)'.")
                 }
             }
             mode = .remote(server: url)
-        } else if AnisetteClient.validateLibrariesExist(at: AnisetteDataProvider.shared.libsDir) {
-            mode = .localODA(libsDir: AnisetteDataProvider.shared.libsDir)
+        } else if AnisetteClient.validateLibrariesExist(at: AnisetteDataManager.shared.libsDir) {
+            mode = .localODA(libsDir: AnisetteDataManager.shared.libsDir)
         } else {
             throw CLIError.missingRequiredArgument("""
             An Anisette mode is required. Specify one of:
@@ -1301,7 +1301,7 @@ public enum CommandHandler {
             }
         }
 
-        let provider = AnisetteDataProvider(mode: mode)
+        let provider = AnisetteDataManager(mode: mode)
         let anisetteData: AnisetteData
         let newAdiPb: Data?
 
@@ -1470,7 +1470,7 @@ public enum CommandHandler {
         }
 
         print("Fetching available Anisette servers from \(url.host ?? url.absoluteString)...")
-        let provider = AnisetteDataProvider.shared
+        let provider = AnisetteDataManager.shared
         let data = try await provider.fetchServerList(from: url)
 
         let visibleServers = data.servers.filter { !$0.isHidden }

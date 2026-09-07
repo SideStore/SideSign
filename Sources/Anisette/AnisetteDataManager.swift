@@ -1,5 +1,5 @@
 //
-//  AnisetteDataProvider.swift
+//  AnisetteDataManager.swift
 //  SideSign
 //
 //  Created by Magesh K on 30/08/26.
@@ -234,8 +234,8 @@ public enum AnisetteError: LocalizedError, Sendable {
 
 public typealias OnDeviceAnisetteError = AnisetteError
 
-public actor AnisetteDataProvider {
-    public static let shared = AnisetteDataProvider()
+public actor AnisetteDataManager {
+    public static let shared = AnisetteDataManager()
 
     public var activeMode: AnisetteMode?
     public nonisolated let baseAnisetteDirectory: URL
@@ -1001,10 +1001,10 @@ public actor AnisetteDataProvider {
         let libDir: URL
         if let target = targetDirectory {
             libDir = target
-            debugLog("[AnisetteDataProvider] Using custom target directory for libraries: \(libDir.path)")
+            debugLog("[AnisetteDataManager] Using custom target directory for libraries: \(libDir.path)")
         } else {
             libDir = remoteLibsDir
-            debugLog("[AnisetteDataProvider] Using default remote libraries directory: \(libDir.path)")
+            debugLog("[AnisetteDataManager] Using default remote libraries directory: \(libDir.path)")
         }
         let prov = provisioningDir
 
@@ -1040,7 +1040,7 @@ public actor AnisetteDataProvider {
         if let expectedSHA = oda.sha256, !expectedSHA.isEmpty {
             let zipSHA = computeSHA256(data: zipData)
             if zipSHA.caseInsensitiveCompare(expectedSHA) != .orderedSame {
-                debugLog("[AnisetteDataProvider] SHA-256 mismatch (expected: \(expectedSHA), actual: \(zipSHA)). Proceeding with extraction.")
+                debugLog("[AnisetteDataManager] SHA-256 mismatch (expected: \(expectedSHA), actual: \(zipSHA)). Proceeding with extraction.")
             }
         }
 
@@ -1067,7 +1067,7 @@ public actor AnisetteDataProvider {
     public func setupFromRemote(serverSourceURL: URL, fallbackODAURL: URL? = nil, force: Bool = false, clientInfo: String = AnisetteConstants.defaultClientInfo) async throws {
         let targetLibDir = remoteLibsDir
         if !force && AnisetteClient.validateLibrariesExist(at: targetLibDir) {
-            debugLog("[AnisetteDataProvider] Remote libraries already present in \(targetLibDir.path), using cache.")
+            debugLog("[AnisetteDataManager] Remote libraries already present in \(targetLibDir.path), using cache.")
             return
         }
         let odaInfo = try await fetchODAInfo(from: serverSourceURL, fallbackODAURL: fallbackODAURL)
