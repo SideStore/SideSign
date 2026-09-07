@@ -530,7 +530,7 @@ public enum CommandHandler {
                     }
                 }
                 mode = .remote(server: url)
-            } else if LocalAnisetteProvider.validateLibrariesExist(at: AnisetteDataProvider.shared.libsDir) {
+            } else if AnisetteClient.validateLibrariesExist(at: AnisetteDataProvider.shared.libsDir) {
                 mode = .localODA(libsDir: AnisetteDataProvider.shared.libsDir)
             } else {
                 throw CLIError.missingRequiredArgument("""
@@ -1258,7 +1258,7 @@ public enum CommandHandler {
                 }
             }
             mode = .remote(server: url)
-        } else if LocalAnisetteProvider.validateLibrariesExist(at: AnisetteDataProvider.shared.libsDir) {
+        } else if AnisetteClient.validateLibrariesExist(at: AnisetteDataProvider.shared.libsDir) {
             mode = .localODA(libsDir: AnisetteDataProvider.shared.libsDir)
         } else {
             throw CLIError.missingRequiredArgument("""

@@ -10,8 +10,6 @@ import Foundation
 import Crypto
 import AnisetteKit
 
-extension LocalAnisetteProvider: @retroactive @unchecked Sendable {}
-
 public enum AnisetteMode: Sendable, Equatable, Codable, Hashable {
     case remote(server: URL)
     case localODA(libsDir: URL, provisioningDir: URL? = nil)
@@ -241,7 +239,7 @@ public actor AnisetteDataProvider {
 
     public var activeMode: AnisetteMode?
     public nonisolated let baseAnisetteDirectory: URL
-    private var localProvider: LocalAnisetteProvider?
+    private var localProvider: AnisetteClient?
     private var isCaching: Bool = false
 
     public static var defaultBaseDirectory: URL {
@@ -284,14 +282,14 @@ public actor AnisetteDataProvider {
     }
 
     public nonisolated var libsDir: URL {
-        if LocalAnisetteProvider.validateLibrariesExist(at: localLibsDir) {
+        if AnisetteClient.validateLibrariesExist(at: localLibsDir) {
             return localLibsDir
         }
         return remoteLibsDir
     }
 
     public func isReady() -> Bool {
-        LocalAnisetteProvider.validateLibrariesExist(at: libsDir)
+        AnisetteClient.validateLibrariesExist(at: libsDir)
     }
 
     public static func validateServer(url: URL, strict: Bool = false) async -> Bool {
@@ -334,7 +332,7 @@ public actor AnisetteDataProvider {
     public static func parseAnisetteData(
         from dictionary: [String: String],
         defaultDeviceID: String = UUID().uuidString,
-        defaultClientInfo: String = LocalAnisetteProvider.defaultClientInfo,
+        defaultClientInfo: String = AnisetteConstants.defaultClientInfo,
         defaultLocalUserID: String = "0",
         defaultLocale: Locale = .current,
         defaultTimeZone: TimeZone = .current
@@ -401,6 +399,10 @@ public actor AnisetteDataProvider {
         )
     }
 
+    public static func safeTimeZoneAbbreviation(for timeZone: TimeZone, date: Date = Date()) -> String {
+        AnisetteKit.safeTimeZoneAbbreviation(for: timeZone, date: date)
+    }
+
     public static func toHTTPHeaders(data: AnisetteData) -> [String: String] {
         let formatter = ISO8601DateFormatter()
         return [
@@ -413,7 +415,7 @@ public actor AnisetteDataProvider {
             "X-Mme-Client-Info": data.deviceDescription,
             "X-Apple-I-Client-Time": formatter.string(from: data.date),
             "X-Apple-Locale": data.locale.identifier.components(separatedBy: "@").first ?? "en_US",
-            "X-Apple-I-TimeZone": data.timeZone.abbreviation() ?? "UTC"
+            "X-Apple-I-TimeZone": safeTimeZoneAbbreviation(for: data.timeZone, date: data.date)
         ]
     }
 
@@ -421,104 +423,125 @@ public actor AnisetteDataProvider {
         mode: AnisetteMode? = nil,
         identifier: UUID = UUID(),
         existingAdiBlob: Data? = nil,
-        clientInfo: String = LocalAnisetteProvider.defaultClientInfo,
+        clientInfo: String = AnisetteConstants.defaultClientInfo,
         customLocalUserID: String? = nil,
         customDeviceID: String? = nil,
         customLocale: Locale = .current,
         customTimeZone: TimeZone = .current,
+        customRoutingInfo: String? = nil,
+        customSerialNumber: String? = nil,
+        customDate: Date? = nil,
+        headers: AnisetteHeaders? = nil,
         onError: (@Sendable (Error) async throws -> Bool)? = nil
     ) async throws -> (data: AnisetteData, newAdiBlob: Data?) {
         guard let resolvedMode = mode ?? self.activeMode else {
             throw AnisetteError.modeNotConfigured
         }
 
+        var resolvedHeaders = headers ?? AnisetteHeaders()
+        if resolvedHeaders.deviceID == nil {
+            resolvedHeaders.deviceID = customDeviceID ?? identifier.uuidString.uppercased()
+        }
+        if resolvedHeaders.clientInfo == nil {
+            resolvedHeaders.clientInfo = clientInfo
+        }
+        if resolvedHeaders.localUserID == nil {
+            resolvedHeaders.localUserID = customLocalUserID
+        }
+        if resolvedHeaders.routingInfo == nil {
+            resolvedHeaders.routingInfo = customRoutingInfo
+        }
+        if resolvedHeaders.serialNumber == nil {
+            resolvedHeaders.serialNumber = customSerialNumber
+        }
+        if resolvedHeaders.date == nil {
+            resolvedHeaders.date = customDate
+        }
+        if resolvedHeaders.locale == nil {
+            resolvedHeaders.locale = customLocale.identifier.components(separatedBy: "@").first
+        }
+        if resolvedHeaders.timeZone == nil {
+            resolvedHeaders.timeZone = safeTimeZoneAbbreviation(for: customTimeZone)
+        }
+
         switch resolvedMode {
         case .remote(let server):
-            let effectiveDeviceID = customDeviceID ?? identifier.uuidString
-            var lastV3Error: Error?
-
-            // 1. Try v3 get_headers with existing adi.pb if present
-            if let adiBlob = existingAdiBlob {
-                do {
-                    debugLog("[Anisette] [v3] Fetching headers with existing adi.pb (\(adiBlob.count) bytes) from \(server.absoluteString)...")
-                    let (data, _) = try await fetchV3Headers(server: server, identifier: effectiveDeviceID, adiBlob: adiBlob, clientInfo: clientInfo, customLocalUserID: customLocalUserID, customLocale: customLocale, customTimeZone: customTimeZone)
-                    debugLog("[Anisette] [v3] Successfully acquired headers using existing adi.pb")
-                    return (data, nil)
-                } catch {
-                    lastV3Error = error
-                    debugLog("[Anisette] [v3] Existing adi.pb failed: \(error.localizedDescription)")
-                }
+            let effectiveDeviceID = resolvedHeaders.deviceID ?? customDeviceID ?? identifier.uuidString
+            let remoteProvider = RemoteAnisetteDataProvider(serverURL: server)
+            let client = try AnisetteClient(
+                provisioningDir: provisioningDir,
+                clientInfo: resolvedHeaders.clientInfo ?? clientInfo
+            ) {
+                self.libsDir
             }
 
-            // 2. Try remote v3 provisioning session
-            var newlyProvisionedBlob: Data? = nil
             do {
-                debugLog("[Anisette] [v3] Starting remote provisioning session with \(server.absoluteString)...")
-                let remoteBlob = try await runRemoteProvisioningSession(server: server, identifier: identifier, clientInfo: clientInfo)
-                newlyProvisionedBlob = remoteBlob
-                debugLog("[Anisette] [v3] Provisioning successful! Fetching v3 headers with new adi.pb...")
-                let (data, _) = try await fetchV3Headers(server: server, identifier: effectiveDeviceID, adiBlob: remoteBlob, clientInfo: clientInfo, customLocalUserID: customLocalUserID, customLocale: customLocale, customTimeZone: customTimeZone)
-                debugLog("[Anisette] [v3] Successfully acquired headers using new adi.pb")
-                return (data, newlyProvisionedBlob)
+                let (rawHeaders, newBlob) = try await client.getHeaders(
+                    identifier: identifier,
+                    storage: .memory(existingBlob: existingAdiBlob),
+                    headers: resolvedHeaders,
+                    provider: remoteProvider
+                )
+
+                let anisetteData = try Self.parseAnisetteData(
+                    from: rawHeaders,
+                    defaultDeviceID: effectiveDeviceID,
+                    defaultClientInfo: resolvedHeaders.clientInfo ?? clientInfo,
+                    defaultLocale: customLocale,
+                    defaultTimeZone: customTimeZone
+                )
+                return (anisetteData, newBlob)
             } catch {
-                lastV3Error = error
-                debugLog("[Anisette] [v3] Remote provisioning failed: \(error.localizedDescription)")
-            }
-
-            // 3. Fallback to legacy v1 root GET
-            debugLog("[Anisette] [v1] Falling back to legacy root GET on \(server.absoluteString)...")
-            if let errorHandler = onError {
-                let shouldContinue = try await errorHandler(AnisetteError.outdatedV1Server(server: server, reason: lastV3Error?.localizedDescription))
-                guard shouldContinue else {
-                    throw AnisetteError.outdatedV1Server(server: server, reason: lastV3Error?.localizedDescription)
+                if let errorHandler = onError {
+                    let shouldContinue = try await errorHandler(error)
+                    guard shouldContinue else {
+                        throw error
+                    }
                 }
+                throw error
             }
-
-            var request = URLRequest(url: server)
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            request.timeoutInterval = 15
-            let (data, response) = try await URLSession.shared.data(for: request)
-
-            guard let httpResp = response as? HTTPURLResponse, httpResp.isSuccess else {
-                let status = (response as? HTTPURLResponse)?.safeStatusCode ?? -1
-                let payload = String(data: data, encoding: .utf8) ?? ""
-                throw AnisetteError.badServerResponse(statusCode: status, payload: payload)
-            }
-
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: String] else {
-                throw AnisetteError.invalidAnisetteData
-            }
-
-            let anisette = try Self.parseAnisetteData(
-                from: json,
-                defaultDeviceID: effectiveDeviceID,
-                defaultClientInfo: clientInfo,
-                defaultLocale: customLocale,
-                defaultTimeZone: customTimeZone
-            )
-            debugLog("[Anisette] [v1] Successfully acquired legacy v1 headers from \(server.absoluteString)")
-            return (anisette, newlyProvisionedBlob)
 
         case .localODA(let libDir, let prov):
             let targetProvDir = prov ?? provisioningDir
             try FileManager.default.createDirectory(at: targetProvDir, withIntermediateDirectories: true)
-            let provider = try LocalAnisetteProvider(
+            let provider = try AnisetteClient(
                 provisioningDir: targetProvDir,
-                clientInfo: clientInfo,
+                clientInfo: resolvedHeaders.clientInfo ?? clientInfo,
                 libraryDirectoryResolver: { libDir }
             )
 
-            let (headers, newAdiPb) = try await provider.getHeaders(identifier: identifier, storage: .memory(existingBlob: existingAdiBlob))
+            let (headers, newAdiPb) = try await provider.getHeaders(
+                identifier: identifier,
+                storage: .memory(existingBlob: existingAdiBlob),
+                headers: resolvedHeaders
+            )
             guard let machineID = headers["X-Apple-I-MD-M"],
                   let oneTimePassword = headers["X-Apple-I-MD"],
                   let routingInfoStr = headers["X-Apple-I-MD-RINFO"],
                   let routingInfo = UInt64(routingInfoStr),
-                  let localUserID = headers["X-Apple-I-MD-LU"] ?? customLocalUserID else {
+                  let localUserID = headers["X-Apple-I-MD-LU"] ?? resolvedHeaders.localUserID else {
                 throw AnisetteError.invalidAnisetteData
             }
 
-            let serial = headers["X-Apple-I-SRL-NO"] ?? "0"
-            let deviceUID = customDeviceID ?? identifier.uuidString.uppercased()
+            let serial = headers["X-Apple-I-SRL-NO"] ?? resolvedHeaders.serialNumber ?? "0"
+            let deviceUID = headers["X-Mme-Device-Id"] ?? resolvedHeaders.deviceID ?? identifier.uuidString.uppercased()
+
+            let effectiveTimeZone: TimeZone = {
+                if let tzStr = headers["X-Apple-I-TimeZone"],
+                   let parsed = TimeZone(abbreviation: tzStr) ?? TimeZone(identifier: tzStr) {
+                    return parsed
+                }
+                let safeAbbr = safeTimeZoneAbbreviation(for: customTimeZone)
+                return TimeZone(abbreviation: safeAbbr) ?? TimeZone(identifier: "UTC") ?? customTimeZone
+            }()
+
+            let parsedDate: Date = {
+                if let dateStr = headers["X-Apple-I-Client-Time"],
+                   let parsed = ISO8601DateFormatter().date(from: dateStr) {
+                    return parsed
+                }
+                return resolvedHeaders.date ?? Date()
+            }()
 
             let anisetteData = AnisetteData(
                 machineID: machineID,
@@ -527,33 +550,54 @@ public actor AnisetteDataProvider {
                 routingInfo: routingInfo,
                 deviceUniqueIdentifier: deviceUID,
                 deviceSerialNumber: serial,
-                deviceDescription: clientInfo,
-                date: Date(),
+                deviceDescription: headers["X-Mme-Client-Info"] ?? resolvedHeaders.clientInfo ?? clientInfo,
+                date: parsedDate,
                 locale: customLocale,
-                timeZone: customTimeZone
+                timeZone: effectiveTimeZone
             )
             return (anisetteData, newAdiPb)
 
         case .remoteODA(let sourceURL, let fallbackURL):
             try FileManager.default.createDirectory(at: libsDir, withIntermediateDirectories: true)
             try FileManager.default.createDirectory(at: provisioningDir, withIntermediateDirectories: true)
-            if !LocalAnisetteProvider.validateLibrariesExist(at: libsDir) {
-                try await setupFromRemote(serverSourceURL: sourceURL, fallbackODAURL: fallbackURL, clientInfo: clientInfo)
+            if !AnisetteClient.validateLibrariesExist(at: libsDir) {
+                try await setupFromRemote(serverSourceURL: sourceURL, fallbackODAURL: fallbackURL, clientInfo: resolvedHeaders.clientInfo ?? clientInfo)
             }
 
-            let provider = try await ensureProviderLoaded(clientInfo: clientInfo)
-            let (headers, newAdiPb) = try await provider.getHeaders(identifier: identifier, storage: .memory(existingBlob: existingAdiBlob))
+            let provider = try await ensureProviderLoaded(clientInfo: resolvedHeaders.clientInfo ?? clientInfo)
+            let (headers, newAdiPb) = try await provider.getHeaders(
+                identifier: identifier,
+                storage: .memory(existingBlob: existingAdiBlob),
+                headers: resolvedHeaders
+            )
 
             guard let machineID = headers["X-Apple-I-MD-M"],
                   let oneTimePassword = headers["X-Apple-I-MD"],
                   let routingInfoStr = headers["X-Apple-I-MD-RINFO"],
                   let routingInfo = UInt64(routingInfoStr),
-                  let localUserID = headers["X-Apple-I-MD-LU"] ?? customLocalUserID else {
+                  let localUserID = headers["X-Apple-I-MD-LU"] ?? resolvedHeaders.localUserID else {
                 throw AnisetteError.invalidAnisetteData
             }
 
-            let serial = headers["X-Apple-I-SRL-NO"] ?? "0"
-            let deviceUID = customDeviceID ?? identifier.uuidString.uppercased()
+            let serial = headers["X-Apple-I-SRL-NO"] ?? resolvedHeaders.serialNumber ?? "0"
+            let deviceUID = headers["X-Mme-Device-Id"] ?? resolvedHeaders.deviceID ?? identifier.uuidString.uppercased()
+
+            let effectiveTimeZone: TimeZone = {
+                if let tzStr = headers["X-Apple-I-TimeZone"],
+                   let parsed = TimeZone(abbreviation: tzStr) ?? TimeZone(identifier: tzStr) {
+                    return parsed
+                }
+                let safeAbbr = safeTimeZoneAbbreviation(for: customTimeZone)
+                return TimeZone(abbreviation: safeAbbr) ?? TimeZone(identifier: "UTC") ?? customTimeZone
+            }()
+
+            let parsedDate: Date = {
+                if let dateStr = headers["X-Apple-I-Client-Time"],
+                   let parsed = ISO8601DateFormatter().date(from: dateStr) {
+                    return parsed
+                }
+                return resolvedHeaders.date ?? Date()
+            }()
 
             let anisetteData = AnisetteData(
                 machineID: machineID,
@@ -562,10 +606,10 @@ public actor AnisetteDataProvider {
                 routingInfo: routingInfo,
                 deviceUniqueIdentifier: deviceUID,
                 deviceSerialNumber: serial,
-                deviceDescription: clientInfo,
-                date: Date(),
+                deviceDescription: headers["X-Mme-Client-Info"] ?? resolvedHeaders.clientInfo ?? clientInfo,
+                date: parsedDate,
                 locale: customLocale,
-                timeZone: customTimeZone
+                timeZone: effectiveTimeZone
             )
             return (anisetteData, newAdiPb)
         }
@@ -576,11 +620,15 @@ public actor AnisetteDataProvider {
         startIndex: Int = 0,
         identifier: UUID = UUID(),
         existingAdiBlob: Data? = nil,
-        clientInfo: String = LocalAnisetteProvider.defaultClientInfo,
+        clientInfo: String = AnisetteConstants.defaultClientInfo,
         customLocalUserID: String? = nil,
         customDeviceID: String? = nil,
         customLocale: Locale = .current,
         customTimeZone: TimeZone = .current,
+        customRoutingInfo: String? = nil,
+        customSerialNumber: String? = nil,
+        customDate: Date? = nil,
+        headers: AnisetteHeaders? = nil,
         onError: (@Sendable (Error) async throws -> Bool)? = nil,
         onSuccess: (@Sendable (URL) -> Void)? = nil
     ) async throws -> (data: AnisetteData, newAdiBlob: Data?) {
@@ -608,6 +656,10 @@ public actor AnisetteDataProvider {
                     customDeviceID: customDeviceID,
                     customLocale: customLocale,
                     customTimeZone: customTimeZone,
+                    customRoutingInfo: customRoutingInfo,
+                    customSerialNumber: customSerialNumber,
+                    customDate: customDate,
+                    headers: headers,
                     onError: onError
                 )
                 debugLog("[Anisette Failover] Successfully acquired Anisette data from \(serverURL.absoluteString)")
@@ -936,7 +988,7 @@ public actor AnisetteDataProvider {
         }
     }
 
-    public func downloadAndCacheLibs(from oda: ODAInfo, targetDirectory: URL? = nil, clientInfo: String = LocalAnisetteProvider.defaultClientInfo) async throws {
+    public func downloadAndCacheLibs(from oda: ODAInfo, targetDirectory: URL? = nil, clientInfo: String = AnisetteConstants.defaultClientInfo) async throws {
         guard !isCaching else {
             while isCaching {
                 try await Task.sleep(nanoseconds: Constants.Anisette.cachingPollingDelayNanoseconds)
@@ -998,11 +1050,11 @@ public actor AnisetteDataProvider {
 
         try fm.unzipArchive(at: tempZipURL, to: libDir)
 
-        guard LocalAnisetteProvider.validateLibrariesExist(at: libDir) else {
-            throw AnisetteError.missingRequiredLibs(LocalAnisetteProvider.requiredLibraryNames)
+        guard AnisetteClient.validateLibrariesExist(at: libDir) else {
+            throw AnisetteError.missingRequiredLibs(AnisetteConstants.Libraries.requiredNames)
         }
 
-        let provider = try LocalAnisetteProvider(
+        let provider = try AnisetteClient(
             provisioningDir: prov,
             clientInfo: clientInfo
         ) {
@@ -1012,9 +1064,9 @@ public actor AnisetteDataProvider {
         self.localProvider = provider
     }
 
-    public func setupFromRemote(serverSourceURL: URL, fallbackODAURL: URL? = nil, force: Bool = false, clientInfo: String = LocalAnisetteProvider.defaultClientInfo) async throws {
+    public func setupFromRemote(serverSourceURL: URL, fallbackODAURL: URL? = nil, force: Bool = false, clientInfo: String = AnisetteConstants.defaultClientInfo) async throws {
         let targetLibDir = remoteLibsDir
-        if !force && LocalAnisetteProvider.validateLibrariesExist(at: targetLibDir) {
+        if !force && AnisetteClient.validateLibrariesExist(at: targetLibDir) {
             debugLog("[AnisetteDataProvider] Remote libraries already present in \(targetLibDir.path), using cache.")
             return
         }
@@ -1022,7 +1074,7 @@ public actor AnisetteDataProvider {
         try await downloadAndCacheLibs(from: odaInfo, targetDirectory: targetLibDir, clientInfo: clientInfo)
     }
 
-    public func ensureProviderLoaded(clientInfo: String = LocalAnisetteProvider.defaultClientInfo) async throws -> LocalAnisetteProvider {
+    public func ensureProviderLoaded(clientInfo: String = AnisetteConstants.defaultClientInfo) async throws -> AnisetteClient {
         if let existing = self.localProvider {
             return existing
         }
@@ -1030,8 +1082,8 @@ public actor AnisetteDataProvider {
         let libDir = libsDir
         let prov = provisioningDir
 
-        if LocalAnisetteProvider.validateLibrariesExist(at: libDir) {
-            let provider = try LocalAnisetteProvider(
+        if AnisetteClient.validateLibrariesExist(at: libDir) {
+            let provider = try AnisetteClient(
                 provisioningDir: prov,
                 clientInfo: clientInfo
             ) {

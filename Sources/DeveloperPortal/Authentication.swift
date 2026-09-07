@@ -38,7 +38,7 @@ public extension DeveloperPortal {
             "X-Apple-I-MD-RINFO": anisetteData.routingInfo,
             "X-Apple-I-SRL-NO": anisetteData.deviceSerialNumber,
             "X-Apple-I-Client-Time": formatDate(anisetteData.date),
-            "X-Apple-I-TimeZone": anisetteData.timeZone.abbreviation(for: anisetteData.date) ?? "PST"
+            "X-Apple-I-TimeZone": safeTimeZoneAbbreviation(for: anisetteData.timeZone, date: anisetteData.date)
         ]
 
         guard let srpClient = SRPClient(),
@@ -881,7 +881,7 @@ public extension DeveloperPortal {
             "X-MMe-Client-Info": context.anisetteData.deviceDescription,
             "X-Apple-I-Client-Time": formatDate(context.anisetteData.date),
             "X-Apple-Locale": context.anisetteData.locale.identifier,
-            "X-Apple-I-TimeZone": context.anisetteData.timeZone.abbreviation(for: context.anisetteData.date) ?? "PST"
+            "X-Apple-I-TimeZone": safeTimeZoneAbbreviation(for: context.anisetteData.timeZone, date: context.anisetteData.date)
         ]
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         return request

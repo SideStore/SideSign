@@ -282,7 +282,7 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
             "X-Apple-I-Client-Time": formatDate(a.date),
             "X-Apple-Locale": a.locale.identifier,
             "X-Apple-I-Locale": a.locale.identifier,
-            "X-Apple-I-TimeZone": a.timeZone.abbreviation(for: a.date) ?? ""
+            "X-Apple-I-TimeZone": safeTimeZoneAbbreviation(for: a.timeZone, date: a.date)
         ]
 
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
@@ -388,7 +388,7 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
             headers["X-MMe-Client-Info"] = a.deviceDescription
             headers["X-Apple-I-Client-Time"] = formatDate(Date())
             headers["X-Apple-Locale"] = a.locale.identifier
-            headers["X-Apple-I-TimeZone"] = a.timeZone.abbreviation(for: Date()) ?? ""
+            headers["X-Apple-I-TimeZone"] = safeTimeZoneAbbreviation(for: a.timeZone, date: Date())
         }
 
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
