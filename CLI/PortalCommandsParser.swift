@@ -427,12 +427,12 @@ public enum PortalCommandsParser {
 
             while idx < subArgs.count {
                 switch subArgs[idx] {
-                case flags["bundleID"]: bundleIDStr   = nextVal()
-                case flags["type"]:     typeStr       = nextVal()
-                case flags["name"]:     nameStr       = nextVal()
-                case flags["certIDs"]:  certIDsStr    = nextVal()
-                case flags["deviceIDs"]:deviceIDsStr  = nextVal()
-                case flags["output"]:   outputPath    = nextVal()
+                case flags["bundleID"]:     bundleIDStr     = nextVal()
+                case flags["type"]:         typeStr         = nextVal()
+                case flags["name"]:         nameStr         = nextVal()
+                case flags["certIDs"]:      certIDsStr      = nextVal()
+                case flags["deviceIDs"]:    deviceIDsStr    = nextVal()
+                case flags["output"]:       outputPath      = nextVal()
                 default:                break
                 }
                 idx += 1
@@ -478,12 +478,12 @@ public enum PortalCommandsParser {
 
             while idx < subArgs.count {
                 switch subArgs[idx] {
-                case flags["id"]:       profileID   = nextVal()
-                case flags["name"]:     nameStr     = nextVal()
-                case flags["appID"]:    appIDStr    = nextVal()
-                case flags["certIDs"]:  certIDsStr  = nextVal()
-                case flags["deviceIDs"]:deviceIDsStr= nextVal()
-                case flags["output"]:   outputPath  = nextVal()
+                case flags["id"]:           profileID       = nextVal()
+                case flags["name"]:         nameStr         = nextVal()
+                case flags["appID"]:        appIDStr        = nextVal()
+                case flags["certIDs"]:      certIDsStr      = nextVal()
+                case flags["deviceIDs"]:    deviceIDsStr    = nextVal()
+                case flags["output"]:       outputPath      = nextVal()
                 default:                break
                 }
                 idx += 1
