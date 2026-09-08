@@ -1168,6 +1168,75 @@ public enum CommandHandler {
                     print("Successfully created profile: \(profile.name) (UUID: \(profile.uuid))")
                 }
 
+            case .edit(let profID, let name, let customAppID, let certIDs, let deviceIDs, let outputPath):
+                let profiles = try await portal.fetchProvisioningProfiles(includeTeamProfiles: true, for: team, session: session)
+                guard let target = profiles.first(where: { $0.identifier == profID || $0.uuid.uuidString == profID }) else {
+                    throw CLIError.executionFailed("Provisioning Profile '\(profID)' not found.")
+                }
+
+                guard let profileID = target.identifier else {
+                    throw CLIError.executionFailed("Target profile does not have a valid portal identifier.")
+                }
+
+                let finalName = (name != nil && !name!.isEmpty) ? name! : target.name
+
+                let finalAppIDId: String
+                if let rawAppID = customAppID, !rawAppID.isEmpty {
+                    let appIDs = try await portal.fetchAppIDs(for: team, session: session)
+                    if let matched = appIDs.first(where: { $0.bundleIdentifier == rawAppID || $0.identifier == rawAppID }) {
+                        finalAppIDId = matched.identifier
+                    } else {
+                        finalAppIDId = rawAppID
+                    }
+                } else if let existingAppID = target.appId?.appIdId ?? target.appId?.identifier {
+                    finalAppIDId = existingAppID
+                } else {
+                    throw CLIError.missingRequiredArgument("App ID is required to update profile. Specify with --app-id <app_id>")
+                }
+
+                let finalCertIDs: [String]
+                if let cIDs = certIDs, !cIDs.isEmpty {
+                    finalCertIDs = cIDs
+                } else {
+                    let certs = try await portal.fetchCertificates(for: team, session: session)
+                    finalCertIDs = certs.compactMap { $0.identifier }
+                    guard !finalCertIDs.isEmpty else {
+                        throw CLIError.executionFailed("No certificates found on team to associate with profile.")
+                    }
+                }
+
+                let finalDeviceIDs: [String]
+                if let dIDs = deviceIDs, !dIDs.isEmpty {
+                    finalDeviceIDs = dIDs
+                } else if let existingDeviceIDs = target.deviceIds, !existingDeviceIDs.isEmpty {
+                    finalDeviceIDs = existingDeviceIDs
+                } else {
+                    let devices = try await portal.fetchDevices(for: team, session: session)
+                    finalDeviceIDs = devices.compactMap { $0.deviceID }
+                    guard !finalDeviceIDs.isEmpty else {
+                        throw CLIError.executionFailed("No devices found on team to associate with profile.")
+                    }
+                }
+
+                print("Updating Provisioning Profile '\(finalName)' (ID: \(profileID))...")
+                let updated = try await portal.updateProvisioningProfile(
+                    profileID: profileID,
+                    name: finalName,
+                    appIDId: finalAppIDId,
+                    certificateIDs: finalCertIDs,
+                    deviceIDs: finalDeviceIDs,
+                    team: team,
+                    session: session
+                )
+
+                if let out = outputPath {
+                    let outURL = URL(fileURLWithPath: out)
+                    try updated.data.write(to: outURL)
+                    print("Updated profile saved to: \(outURL.path)")
+                } else {
+                    print("Successfully updated profile: \(updated.name) (UUID: \(updated.uuid))")
+                }
+
             case .download(let bundleID, let outputPath):
                 let appIDs = try await portal.fetchAppIDs(for: team, session: session)
                 guard let targetAppID = appIDs.first(where: { $0.bundleIdentifier == bundleID || $0.identifier == bundleID }) else {

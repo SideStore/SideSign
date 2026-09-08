@@ -91,6 +91,7 @@ public enum PortalCommandsParser {
 
     private static let profileFlags: [String: [String]] = [
         "bundleID":         ["--bundle-id", "-b", "-i"],
+        "appID":            ["--app-id", "-a", "-aid"],
         "output":           ["--output", "-o"],
         "id":               ["--id", "-i"],
         "type":             ["--type", "-t"],
@@ -467,6 +468,35 @@ public enum PortalCommandsParser {
                 throw CLIError.missingRequiredArgument("Usage: sidesign dev profiles download --bundle-id <bundle_id> [--output <path>]")
             }
             subAction = .download(bundleID: bundleID, outputPath: outputPath)
+        } else if subArgs.contains("edit") || subArgs.contains("update") || subArgs.contains("modify") {
+            var profileID: String?
+            var nameStr: String?
+            var appIDStr: String?
+            var certIDsStr: String?
+            var deviceIDsStr: String?
+            var outputPath: String?
+
+            while idx < subArgs.count {
+                switch subArgs[idx] {
+                case flags["id"]:       profileID   = nextVal()
+                case flags["name"]:     nameStr     = nextVal()
+                case flags["appID"]:    appIDStr    = nextVal()
+                case flags["certIDs"]:  certIDsStr  = nextVal()
+                case flags["deviceIDs"]:deviceIDsStr= nextVal()
+                case flags["output"]:   outputPath  = nextVal()
+                default:                break
+                }
+                idx += 1
+            }
+
+            guard let profID = profileID else {
+                throw CLIError.missingRequiredArgument("Usage: sidesign dev profiles edit --id <profile_id_or_uuid> [--name <name>] [--app-id <app_id>] [--cert-ids <id1,id2>] [--device-ids <id1,id2>] [--output <path>]")
+            }
+
+            let certIDs = certIDsStr?.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces)) }
+            let deviceIDs = deviceIDsStr?.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces)) }
+
+            subAction = .edit(profileID: profID, name: nameStr, appID: appIDStr, certIDs: certIDs, deviceIDs: deviceIDs, outputPath: outputPath)
         } else if subArgs.contains("delete") || subArgs.contains("rm") || subArgs.contains("remove") {
             var profileID: String?
             while idx < subArgs.count {

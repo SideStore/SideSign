@@ -337,6 +337,7 @@ public struct PortalProfileOptions: Sendable {
         case list
         case download(bundleID: String, outputPath: String?)
         case create(bundleID: String, type: ProfileCreationType, name: String?, certIDs: [String]?, deviceIDs: [String]?, outputPath: String?)
+        case edit(profileID: String, name: String?, appID: String?, certIDs: [String]?, deviceIDs: [String]?, outputPath: String?)
         case delete(profileID: String)
     }
 

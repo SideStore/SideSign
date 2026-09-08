@@ -91,6 +91,52 @@ public extension DeveloperPortal {
         }
     }
 
+    func updateProvisioningProfile(profileID: String,
+                                  name: String,
+                                  appIDId: String,
+                                  certificateIDs: [String],
+                                  deviceIDs: [String],
+                                  subPlatform: String? = nil,
+                                  team: Team,
+                                  session: Session) async throws -> ProvisioningProfile
+    {
+        debugLog("[SideSign] updateProvisioningProfile starting...")
+        verboseLog("[SideSign] ProfileID: \(profileID), Name: \(name), AppID: \(appIDId), Team: \(team.name)")
+
+        var parameters: [String: any Sendable] = [
+            "provisioningProfileId": profileID,
+            "provisioningProfileName": name,
+            "appIdId": appIDId,
+            "distributionType": "limited",
+            "certificateIds": certificateIDs,
+            "deviceIds": deviceIDs
+        ]
+        if let subPlatform = subPlatform {
+            parameters["subPlatform"] = subPlatform
+        }
+
+        do {
+            let response: ProfileResponse = try await sendRequest(
+                url: Constants.URLs.regenProvisioningProfile,
+                additionalParameters: parameters,
+                session: session,
+                team: team
+            )
+
+            guard let updatedProfile = try response.provisioningProfile?.toProvisioningProfile() else {
+                debugLog("[SideSign] updateProvisioningProfile error: Missing provisioning profile in regen response")
+                throw ServerError.badServerResponse(reason: "Missing provisioning profile in regen response", jsonPayload: "")
+            }
+
+            debugLog("[SideSign] updateProvisioningProfile succeeded")
+            verboseLog("[SideSign] Updated: \(updatedProfile.name) (\(updatedProfile.bundleIdentifier))")
+            return updatedProfile
+        } catch {
+            debugLog("[SideSign] updateProvisioningProfile failed: \(error)")
+            throw error
+        }
+    }
+
     func downloadProvisioningProfile(profileID: String,
                                      team: Team,
                                      session: Session) async throws -> ProvisioningProfile

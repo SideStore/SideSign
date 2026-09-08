@@ -74,6 +74,7 @@ public enum Constants {
         public static let downloadProvisioningProfile       = URL(string: "\(servicesBase)/ios/downloadTeamProvisioningProfile.action")!
         public static let downloadManualProvisioningProfile = URL(string: "\(servicesBase)/ios/downloadProvisioningProfile.action")!
         public static let createProvisioningProfile         = URL(string: "\(servicesBase)/ios/createProvisioningProfile.action")!
+        public static let regenProvisioningProfile          = URL(string: "\(servicesBase)/ios/regenProvisioningProfile.action")!
         public static let deleteProvisioningProfile         = URL(string: "\(servicesBase)/ios/deleteProvisioningProfile.action")!
 
         // Anisette Endpoints

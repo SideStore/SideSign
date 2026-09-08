@@ -128,6 +128,7 @@ public protocol DeveloperPortalAPI: Sendable {
 
     func fetchProvisioningProfiles(includeTeamProfiles: Bool, for team: Team, session: Session) async throws -> [ListedProvisioningProfile]
     func createProvisioningProfile(name: String, appID: AppID, certificateIDs: [String], deviceIDs: [String], subPlatform: String?, team: Team, session: Session) async throws -> ProvisioningProfile
+    func updateProvisioningProfile(profileID: String, name: String, appIDId: String, certificateIDs: [String], deviceIDs: [String], subPlatform: String?, team: Team, session: Session) async throws -> ProvisioningProfile
     func downloadProvisioningProfile(profileID: String, team: Team, session: Session) async throws -> ProvisioningProfile
     func downloadProvisioningProfile(for appID: AppID, deviceType: DeviceType, team: Team, session: Session) async throws -> ProvisioningProfile
     func deleteProvisioningProfile(_ profile: ListedProvisioningProfile, team: Team, session: Session) async throws -> Bool
@@ -195,6 +196,10 @@ public extension DeveloperPortalAPI {
 
     func createProvisioningProfile(name: String, appID: AppID, certificateIDs: [String], deviceIDs: [String], team: Team, session: Session) async throws -> ProvisioningProfile {
         try await createProvisioningProfile(name: name, appID: appID, certificateIDs: certificateIDs, deviceIDs: deviceIDs, subPlatform: nil, team: team, session: session)
+    }
+
+    func updateProvisioningProfile(profileID: String, name: String, appIDId: String, certificateIDs: [String], deviceIDs: [String], team: Team, session: Session) async throws -> ProvisioningProfile {
+        try await updateProvisioningProfile(profileID: profileID, name: name, appIDId: appIDId, certificateIDs: certificateIDs, deviceIDs: deviceIDs, subPlatform: nil, team: team, session: session)
     }
 
     func downloadProvisioningProfile(for appID: AppID, team: Team, session: Session) async throws -> ProvisioningProfile {
