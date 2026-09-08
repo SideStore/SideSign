@@ -1132,7 +1132,11 @@ public enum CommandHandler {
                 if !SideSignLogging.isLoggingEnabled {
                     print("\nProvisioning Profiles for team '\(team.name)':")
                     for p in profiles {
-                        print("  * \(p.name) [\(p.bundleIdentifier)] (UUID: \(p.uuid))")
+                        if let bundleID = p.bundleIdentifier {
+                            print("  * \(p.name) [\(bundleID)] (UUID: \(p.uuid))")
+                        } else {
+                            print("  * \(p.name) (UUID: \(p.uuid))")
+                        }
                     }
                 }
             }

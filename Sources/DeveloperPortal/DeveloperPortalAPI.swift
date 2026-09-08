@@ -126,8 +126,9 @@ public protocol DeveloperPortalAPI: Sendable {
     func assignAppGroups(_ appGroups: [AppGroup], to appID: AppID, team: Team, session: Session) async throws -> AppID
     func deleteAppGroup(_ appGroup: AppGroup, team: Team, session: Session) async throws -> Bool
 
-    func fetchProvisioningProfiles(for team: Team, session: Session) async throws -> [ProvisioningProfile]
+    func fetchProvisioningProfiles(for team: Team, session: Session) async throws -> [ListedProvisioningProfile]
     func downloadProvisioningProfile(for appID: AppID, deviceType: DeviceType, team: Team, session: Session) async throws -> ProvisioningProfile
+    func deleteProvisioningProfile(_ profile: ListedProvisioningProfile, team: Team, session: Session) async throws -> Bool
     func deleteProvisioningProfile(_ profile: ProvisioningProfile, team: Team, session: Session) async throws -> Bool
 
     func fetchAuthDevices(session: Session) async throws -> [AuthDevice]

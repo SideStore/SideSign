@@ -167,24 +167,34 @@ struct AppGroupResponse: Decodable, Sendable {
     let resultString: String?
 }
 
-struct AppIDPayload: Decodable, Sendable {
-    let appIdId: String?
-    let identifier: String?
-    let prefix: String?
-    let name: String?
+public struct AppIDPayload: Sendable, Codable, Equatable, Hashable {
+    public let appIdId: String?
+    public let identifier: String?
+    public let prefix: String?
+    public let name: String?
+
+    public init(appIdId: String? = nil, identifier: String? = nil, prefix: String? = nil, name: String? = nil) {
+        self.appIdId = appIdId
+        self.identifier = identifier
+        self.prefix = prefix
+        self.name = name
+    }
 }
 
-struct ProvisioningProfileDetails: Decodable, Sendable {
-    let provisioningProfileId: String?
-    let name: String?
-    let status: String?
-    let type: String?
-    let uuid: String?
-    let dateExpire: Date?
-    let appId: AppIDPayload?
-    let deviceIds: [String]?
-    let isFreeProvisioningProfile: Bool?
-    let encodedProfile: Data?
+public struct ListedProvisioningProfile: Decodable, Sendable, Identifiable, Equatable, Hashable {
+    public var id: String { uuid.uuidString }
+    public let provisioningProfileId: String?
+    public let name: String
+    public let status: String?
+    public let type: String?
+    public let uuid: UUID
+    public let dateExpire: Date
+    public let appId: AppIDPayload?
+    public let deviceIds: [String]?
+    public let isFreeProvisioningProfile: Bool?
+
+    public var identifier: String? { provisioningProfileId }
+    public var bundleIdentifier: String? { appId?.identifier }
 
     enum CodingKeys: String, CodingKey {
         case provisioningProfileId
@@ -196,30 +206,111 @@ struct ProvisioningProfileDetails: Decodable, Sendable {
         case appId
         case deviceIds
         case isFreeProvisioningProfile
+    }
+
+    public init(provisioningProfileId: String? = nil,
+                name: String,
+                status: String? = nil,
+                type: String? = nil,
+                uuid: UUID,
+                dateExpire: Date,
+                appId: AppIDPayload? = nil,
+                deviceIds: [String]? = nil,
+                isFreeProvisioningProfile: Bool? = nil)
+    {
+        self.provisioningProfileId = provisioningProfileId
+        self.name = name
+        self.status = status
+        self.type = type
+        self.uuid = uuid
+        self.dateExpire = dateExpire
+        self.appId = appId
+        self.deviceIds = deviceIds
+        self.isFreeProvisioningProfile = isFreeProvisioningProfile
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.provisioningProfileId = try container.decodeIfPresent(String.self, forKey: .provisioningProfileId)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.status = try container.decodeIfPresent(String.self, forKey: .status)
+        self.type = try container.decodeIfPresent(String.self, forKey: .type)
+
+        let uuidString = try container.decode(String.self, forKey: .uuid)
+        guard let parsedUUID = UUID(uuidString: uuidString) else {
+            throw DecodingError.dataCorruptedError(forKey: .uuid, in: container, debugDescription: "Invalid UUID format: \(uuidString)")
+        }
+        self.uuid = parsedUUID
+
+        if let date = try? container.decode(Date.self, forKey: .dateExpire) {
+            self.dateExpire = date
+        } else if let dateStr = try? container.decode(String.self, forKey: .dateExpire),
+                  let date = ISO8601DateFormatter().date(from: dateStr) {
+            self.dateExpire = date
+        } else {
+            throw DecodingError.dataCorruptedError(forKey: .dateExpire, in: container, debugDescription: "Unable to parse dateExpire as Date or ISO8601 string")
+        }
+
+        self.appId = try container.decodeIfPresent(AppIDPayload.self, forKey: .appId)
+        self.deviceIds = try container.decodeIfPresent([String].self, forKey: .deviceIds)
+        self.isFreeProvisioningProfile = try container.decodeIfPresent(Bool.self, forKey: .isFreeProvisioningProfile)
+    }
+}
+
+public struct ListedProfileResponse: Decodable, Sendable {
+    public let resultCode: Int?
+    public let provisioningProfiles: [ListedProvisioningProfile]?
+    public let userString: String?
+    public let resultString: String?
+}
+
+public struct DownloadedProfileDetails: Decodable, Sendable {
+    public let provisioningProfileId: String?
+    public let name: String?
+    public let status: String?
+    public let type: String?
+    public let uuid: String?
+    public let dateExpire: Date?
+    public let encodedProfile: Data
+
+    enum CodingKeys: String, CodingKey {
+        case provisioningProfileId
+        case name
+        case status
+        case type
+        case uuid = "UUID"
+        case dateExpire
         case encodedProfile
     }
 
-    func toProvisioningProfile() throws -> ProvisioningProfile {
-        guard let encodedProfile else {
-            throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: [CodingKeys.encodedProfile], debugDescription: "Missing encodedProfile in response"))
-        }
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.provisioningProfileId = try container.decodeIfPresent(String.self, forKey: .provisioningProfileId)
+        self.name = try container.decodeIfPresent(String.self, forKey: .name)
+        self.status = try container.decodeIfPresent(String.self, forKey: .status)
+        self.type = try container.decodeIfPresent(String.self, forKey: .type)
+        self.uuid = try container.decodeIfPresent(String.self, forKey: .uuid)
+        self.encodedProfile = try container.decode(Data.self, forKey: .encodedProfile)
 
+        if let date = try? container.decodeIfPresent(Date.self, forKey: .dateExpire) {
+            self.dateExpire = date
+        } else if let dateStr = try? container.decodeIfPresent(String.self, forKey: .dateExpire) {
+            self.dateExpire = ISO8601DateFormatter().date(from: dateStr)
+        } else {
+            self.dateExpire = nil
+        }
+    }
+
+    public func toProvisioningProfile() throws -> ProvisioningProfile {
         var profile = try ProvisioningProfile(data: encodedProfile)
         profile.identifier = provisioningProfileId
         return profile
     }
 }
 
-struct ListProfilesResponse: Decodable, Sendable {
-    let resultCode: Int?
-    let provisioningProfiles: [ProvisioningProfileDetails]?
-    let userString: String?
-    let resultString: String?
-}
-
-struct DownloadProfileResponse: Decodable, Sendable {
-    let resultCode: Int?
-    let provisioningProfile: ProvisioningProfileDetails?
-    let userString: String?
-    let resultString: String?
+public struct ProfileResponse: Decodable, Sendable {
+    public let resultCode: Int?
+    public let provisioningProfile: DownloadedProfileDetails?
+    public let userString: String?
+    public let resultString: String?
 }
