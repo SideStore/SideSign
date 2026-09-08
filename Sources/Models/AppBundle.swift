@@ -21,13 +21,9 @@ public struct AppBundle: Sendable, Identifiable, Hashable, Equatable {
     public let fileURL: URL
     public let bundle: Bundle
     public let iconName: String?
+    public let provisioningProfile: ProvisioningProfile?
 
     public var hasPrivateEntitlements: Bool = false
-
-    public var provisioningProfile: ProvisioningProfile? {
-        let url = fileURL.appendingPathComponent("embedded.mobileprovision")
-        return ProvisioningProfile(fileURL: url)
-    }
 
     public var profileEntitlements: [String: any Sendable]? {
         provisioningProfile?.entitlements
@@ -128,6 +124,9 @@ public struct AppBundle: Sendable, Identifiable, Hashable, Equatable {
         if resolvedIcon == nil {
             resolvedIcon = info["CFBundleIconFile"] as? String
         }
+
+        let profileURL = fileURL.appendingPathComponent("embedded.mobileprovision")
+        self.provisioningProfile = try? ProvisioningProfile(fileURL: profileURL)
 
         self.bundle = bundle
         self.fileURL = fileURL

@@ -106,8 +106,8 @@ public enum CommandHandler {
             var profiles: [ProvisioningProfile] = []
             if let profilePath = context.profilePath {
                 let profURL = URL(fileURLWithPath: profilePath)
-                let profData = try Data(contentsOf: profURL)
-                if let profile = ProvisioningProfile(data: profData) {
+                if let profile = try? ProvisioningProfile(url: profURL) 
+                {
                     profiles.append(profile)
                 } else {
                     throw CLIError.executionFailed("Could not parse provisioning profile at \(profilePath)")
@@ -251,10 +251,7 @@ public enum CommandHandler {
                 print("  * \(ext.name) (\(ext.bundleIdentifier))")
             }
 
-            let profileURL = app.fileURL.appendingPathComponent("embedded.mobileprovision")
-            if FileManager.default.fileExists(atPath: profileURL.path),
-               let profData = try? Data(contentsOf: profileURL),
-               let profile = ProvisioningProfile(data: profData) {
+            if let profile = app.provisioningProfile {
                 print("\nEmbedded Provisioning Profile")
                 print("Name:                \(profile.name)")
                 print("Team:                \(profile.teamName) (\(profile.teamIdentifier))")
@@ -317,8 +314,7 @@ public enum CommandHandler {
 
     public static func handleProfile(context: ProfileContext) throws {
         let fileURL = URL(fileURLWithPath: context.profilePath)
-        let data = try Data(contentsOf: fileURL)
-        guard let profile = ProvisioningProfile(data: data) else {
+        guard let profile = try? ProvisioningProfile(url: fileURL) else {
             throw CLIError.executionFailed("Could not parse provisioning profile at \(context.profilePath)")
         }
 

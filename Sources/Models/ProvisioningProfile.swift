@@ -24,7 +24,7 @@ public struct ProvisioningProfile: Sendable, Codable, Equatable, Hashable, Ident
     public var data: Data
 
     public var entitlements: [String: any Sendable] {
-        guard let dict = Self.dictionary(fromEncodedData: data),
+        guard let dict = try? Self.dictionary(fromEncodedData: data),
               let ents = dict["Entitlements"] as? [String: any Sendable] else 
         {
             return [:]
@@ -33,7 +33,7 @@ public struct ProvisioningProfile: Sendable, Codable, Equatable, Hashable, Ident
     }
 
     public var certificates: [X509Certificate] {
-        guard let dict = Self.dictionary(fromEncodedData: data),
+        guard let dict = try? Self.dictionary(fromEncodedData: data),
               let certDatas = dict["DeveloperCertificates"] as? [Data] else 
         {
             return []
@@ -66,19 +66,28 @@ public struct ProvisioningProfile: Sendable, Codable, Equatable, Hashable, Ident
         self.identifier = identifier
     }
 
-    public init?(data: Data) {
-        guard let dict = Self.dictionary(fromEncodedData: data),
-              let name = dict["Name"] as? String,
-              let uuidString = dict["UUID"] as? String,
-              let uuid = Foundation.UUID(uuidString: uuidString),
-              let teamIdentifier = (dict["TeamIdentifier"] as? [String])?.first,
-              let teamName = dict["TeamName"] as? String,
-              let creationDate = dict["CreationDate"] as? Date,
-              let expirationDate = dict["ExpirationDate"] as? Date,
-              let entitlementsRaw = dict["Entitlements"] as? [String: any Sendable]
-        else {
-            return nil
+    public init(data: Data) throws {
+        let dict = try Self.dictionary(fromEncodedData: data)
+
+        let name: String = try Self.require("Name", from: dict)
+        let uuidString: String = try Self.require("UUID", from: dict)
+        guard let uuid = Foundation.UUID(uuidString: uuidString) else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: [], debugDescription: "Invalid UUID format for '\(uuidString)'")
+            )
         }
+
+        let teamIdentifiers: [String] = try Self.require("TeamIdentifier", from: dict)
+        guard let teamIdentifier = teamIdentifiers.first else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: [], debugDescription: "'TeamIdentifier' array is empty")
+            )
+        }
+
+        let teamName: String = try Self.require("TeamName", from: dict)
+        let creationDate: Date = try Self.require("CreationDate", from: dict)
+        let expirationDate: Date = try Self.require("ExpirationDate", from: dict)
+        let entitlementsRaw: [String: any Sendable] = try Self.require("Entitlements", from: dict)
 
         var bundleID: String?
         if let appID = entitlementsRaw["application-identifier"] as? String,
@@ -86,7 +95,11 @@ public struct ProvisioningProfile: Sendable, Codable, Equatable, Hashable, Ident
             bundleID = String(appID[appID.index(after: dot)...])
         }
 
-        guard let resolvedBundleID = bundleID else { return nil }
+        guard let resolvedBundleID = bundleID else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: [], debugDescription: "Missing or invalid 'application-identifier' in Entitlements")
+            )
+        }
 
         self.data = data
         self.name = name
@@ -101,13 +114,28 @@ public struct ProvisioningProfile: Sendable, Codable, Equatable, Hashable, Ident
         self.identifier = nil
     }
 
-    public init?(url: URL) {
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        self.init(data: data)
+    private static func require<T>(_ key: String, from dict: [String: any Sendable]) throws -> T {
+        guard let raw = dict[key] else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: [], debugDescription: "Missing required key '\(key)'")
+            )
+        }
+        guard let val = raw as? T else {
+            throw DecodingError.typeMismatch(
+                T.self,
+                DecodingError.Context(codingPath: [], debugDescription: "Expected key '\(key)' to be of type \(T.self), but found \(type(of: raw))")
+            )
+        }
+        return val
     }
 
-    public init?(fileURL: URL) {
-        self.init(url: fileURL)
+    public init(url: URL) throws {
+        let data = try Data(contentsOf: url)
+        try self.init(data: data)
+    }
+
+    public init(fileURL: URL) throws {
+        try self.init(url: fileURL)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -172,7 +200,7 @@ public struct ProvisioningProfile: Sendable, Codable, Equatable, Hashable, Ident
         try container.encodeIfPresent(identifier, forKey: .identifier)
     }
 
-    private static func dictionary(fromEncodedData data: Data) -> [String: any Sendable]? {
+    private static func dictionary(fromEncodedData data: Data) throws -> [String: any Sendable] {
         let string = String(decoding: data, as: UTF8.self)
         let scanner = Scanner(string: string)
 
@@ -180,13 +208,17 @@ public struct ProvisioningProfile: Sendable, Codable, Equatable, Hashable, Ident
               let plistString = scanner.scanUpToString("</plist>"),
               let plistData = (plistString + "</plist>").data(using: .utf8)
         else {
-            return nil
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: [], debugDescription: "Could not find '<?xml' ... '</plist>' boundary in provisioning profile CMS data (\(data.count) bytes)")
+            )
         }
 
-        return try? PropertyListSerialization.propertyList(
-            from: plistData,
-            options: [],
-            format: nil
-        ) as? [String: any Sendable]
+        let raw = try PropertyListSerialization.propertyList(from: plistData, options: [], format: nil)
+        guard let dict = raw as? [String: any Sendable] else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: [], debugDescription: "Provisioning profile XML root is not a dictionary")
+            )
+        }
+        return dict
     }
 }

@@ -199,30 +199,14 @@ struct ProvisioningProfileDetails: Decodable, Sendable {
         case encodedProfile
     }
 
-    func toProvisioningProfile() -> ProvisioningProfile? {
-        if let encodedProfile, let profile = ProvisioningProfile(data: encodedProfile) {
-            var mutable = profile
-            mutable.identifier = provisioningProfileId
-            return mutable
+    func toProvisioningProfile() throws -> ProvisioningProfile {
+        guard let encodedProfile else {
+            throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: [CodingKeys.encodedProfile], debugDescription: "Missing encodedProfile in response"))
         }
 
-        guard let name, let uuidStr = uuid, let uuidVal = UUID(uuidString: uuidStr), let dateExpire else {
-            return nil
-        }
-
-        return ProvisioningProfile(
-            name: name,
-            uuid: uuidVal,
-            bundleIdentifier: appId?.identifier ?? "",
-            teamIdentifier: appId?.prefix ?? "",
-            teamName: "",
-            creationDate: Date(),
-            expirationDate: dateExpire,
-            deviceIDs: deviceIds ?? [],
-            isFreeProvisioningProfile: isFreeProvisioningProfile ?? false,
-            data: Data(),
-            identifier: provisioningProfileId
-        )
+        var profile = try ProvisioningProfile(data: encodedProfile)
+        profile.identifier = provisioningProfileId
+        return profile
     }
 }
 
