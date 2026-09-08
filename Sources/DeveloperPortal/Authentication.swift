@@ -315,7 +315,12 @@ public extension DeveloperPortal {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await session.data(for: request)
+            if let operation = requestParameters["o"] as? String,
+               ["init", "complete", "apptokens"].contains(operation) {
+                (data, response) = try await GrandSlamTransport.data(for: request)
+            } else {
+                (data, response) = try await session.data(for: request)
+            }
         } catch {
             debugLog("[SideSign] sendAuthenticationRequest network error: \(error)")
             throw error
