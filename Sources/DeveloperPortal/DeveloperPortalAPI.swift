@@ -126,7 +126,9 @@ public protocol DeveloperPortalAPI: Sendable {
     func assignAppGroups(_ appGroups: [AppGroup], to appID: AppID, team: Team, session: Session) async throws -> AppID
     func deleteAppGroup(_ appGroup: AppGroup, team: Team, session: Session) async throws -> Bool
 
-    func fetchProvisioningProfiles(for team: Team, session: Session) async throws -> [ListedProvisioningProfile]
+    func fetchProvisioningProfiles(includeTeamProfiles: Bool, for team: Team, session: Session) async throws -> [ListedProvisioningProfile]
+    func createProvisioningProfile(name: String, appID: AppID, certificateIDs: [String], deviceIDs: [String], subPlatform: String?, team: Team, session: Session) async throws -> ProvisioningProfile
+    func downloadProvisioningProfile(profileID: String, team: Team, session: Session) async throws -> ProvisioningProfile
     func downloadProvisioningProfile(for appID: AppID, deviceType: DeviceType, team: Team, session: Session) async throws -> ProvisioningProfile
     func deleteProvisioningProfile(_ profile: ListedProvisioningProfile, team: Team, session: Session) async throws -> Bool
     func deleteProvisioningProfile(_ profile: ProvisioningProfile, team: Team, session: Session) async throws -> Bool
@@ -185,6 +187,14 @@ public extension DeveloperPortalAPI {
 
     func fetchDevices(for team: Team, session: Session) async throws -> [Device] {
         try await fetchDevices(for: team, types: .all, session: session)
+    }
+
+    func fetchProvisioningProfiles(for team: Team, session: Session) async throws -> [ListedProvisioningProfile] {
+        try await fetchProvisioningProfiles(includeTeamProfiles: true, for: team, session: session)
+    }
+
+    func createProvisioningProfile(name: String, appID: AppID, certificateIDs: [String], deviceIDs: [String], team: Team, session: Session) async throws -> ProvisioningProfile {
+        try await createProvisioningProfile(name: name, appID: appID, certificateIDs: certificateIDs, deviceIDs: deviceIDs, subPlatform: nil, team: team, session: session)
     }
 
     func downloadProvisioningProfile(for appID: AppID, team: Team, session: Session) async throws -> ProvisioningProfile {

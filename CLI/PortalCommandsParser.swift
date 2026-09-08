@@ -92,7 +92,11 @@ public enum PortalCommandsParser {
     private static let profileFlags: [String: [String]] = [
         "bundleID":         ["--bundle-id", "-b", "-i"],
         "output":           ["--output", "-o"],
-        "id":               ["--id", "-i"]
+        "id":               ["--id", "-i"],
+        "type":             ["--type", "-t"],
+        "name":             ["--name", "-n"],
+        "certIDs":          ["--cert-id", "--cert-ids", "-c"],
+        "deviceIDs":        ["--device-id", "--device-ids", "-d"]
     ]
 
     public static func parseOptions(args: [String]) throws -> (options: PortalOptions, appleID: String?) {
@@ -412,7 +416,43 @@ public enum PortalCommandsParser {
             return subArgs[idx]
         }
 
-        if subArgs.contains("download") || subArgs.contains("fetch") {
+        if subArgs.contains("create") || subArgs.contains("new") || subArgs.contains("add") {
+            var bundleIDStr: String?
+            var typeStr: String?
+            var nameStr: String?
+            var certIDsStr: String?
+            var deviceIDsStr: String?
+            var outputPath: String?
+
+            while idx < subArgs.count {
+                switch subArgs[idx] {
+                case flags["bundleID"]: bundleIDStr   = nextVal()
+                case flags["type"]:     typeStr       = nextVal()
+                case flags["name"]:     nameStr       = nextVal()
+                case flags["certIDs"]:  certIDsStr    = nextVal()
+                case flags["deviceIDs"]:deviceIDsStr  = nextVal()
+                case flags["output"]:   outputPath    = nextVal()
+                default:                break
+                }
+                idx += 1
+            }
+
+            guard let bundleID = bundleIDStr else {
+                throw CLIError.missingRequiredArgument("Usage: sidesign dev profiles create --bundle-id <bundle_id> [--type <xcode|manual>] [--name <name>] [--cert-ids <id1,id2>] [--device-ids <id1,id2>] [--output <path>]")
+            }
+
+            let creationType: ProfileCreationType
+            if let t = typeStr, t.lowercased() == "manual" {
+                creationType = .manual
+            } else {
+                creationType = .xcode
+            }
+
+            let certIDs = certIDsStr?.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces)) }
+            let deviceIDs = deviceIDsStr?.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces)) }
+
+            subAction = .create(bundleID: bundleID, type: creationType, name: nameStr, certIDs: certIDs, deviceIDs: deviceIDs, outputPath: outputPath)
+        } else if subArgs.contains("download") || subArgs.contains("fetch") {
             var bundleIDStr: String?
             var outputPath: String?
             while idx < subArgs.count {

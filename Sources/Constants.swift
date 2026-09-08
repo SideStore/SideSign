@@ -70,9 +70,11 @@ public enum Constants {
         public static let listCertificates          = URL(string: "\(servicesBase)/ios/listAllDevelopmentCerts.action")!
         public static let submitCSR                 = URL(string: "\(servicesBase)/ios/submitDevelopmentCSR.action")!
 
-        public static let listProvisioningProfiles    = URL(string: "\(servicesBase)/ios/listProvisioningProfiles.action")!
-        public static let downloadProvisioningProfile = URL(string: "\(servicesBase)/ios/downloadTeamProvisioningProfile.action")!
-        public static let deleteProvisioningProfile   = URL(string: "\(servicesBase)/ios/deleteProvisioningProfile.action")!
+        public static let listProvisioningProfiles          = URL(string: "\(servicesBase)/ios/listProvisioningProfiles.action")!
+        public static let downloadProvisioningProfile       = URL(string: "\(servicesBase)/ios/downloadTeamProvisioningProfile.action")!
+        public static let downloadManualProvisioningProfile = URL(string: "\(servicesBase)/ios/downloadProvisioningProfile.action")!
+        public static let createProvisioningProfile         = URL(string: "\(servicesBase)/ios/createProvisioningProfile.action")!
+        public static let deleteProvisioningProfile         = URL(string: "\(servicesBase)/ios/deleteProvisioningProfile.action")!
 
         // Anisette Endpoints
         public static let v3ClientInfo          = "v3/client_info"

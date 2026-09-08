@@ -116,4 +116,14 @@ public extension TeamType {
             return nil
         }
     }
+
+    var isPaid: Bool {
+        self != .free && self != .unknown
+    }
+}
+
+public extension Team {
+    var isPaid: Bool {
+        type.isPaid
+    }
 }

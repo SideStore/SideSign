@@ -192,6 +192,7 @@ public struct ListedProvisioningProfile: Decodable, Sendable, Identifiable, Equa
     public let appId: AppIDPayload?
     public let deviceIds: [String]?
     public let isFreeProvisioningProfile: Bool?
+    public let isTeamProfile: Bool?
 
     public var identifier: String? { provisioningProfileId }
     public var bundleIdentifier: String? { appId?.identifier }
@@ -206,6 +207,7 @@ public struct ListedProvisioningProfile: Decodable, Sendable, Identifiable, Equa
         case appId
         case deviceIds
         case isFreeProvisioningProfile
+        case isTeamProfile
     }
 
     public init(provisioningProfileId: String? = nil,
@@ -216,7 +218,8 @@ public struct ListedProvisioningProfile: Decodable, Sendable, Identifiable, Equa
                 dateExpire: Date,
                 appId: AppIDPayload? = nil,
                 deviceIds: [String]? = nil,
-                isFreeProvisioningProfile: Bool? = nil)
+                isFreeProvisioningProfile: Bool? = nil,
+                isTeamProfile: Bool? = nil)
     {
         self.provisioningProfileId = provisioningProfileId
         self.name = name
@@ -227,6 +230,7 @@ public struct ListedProvisioningProfile: Decodable, Sendable, Identifiable, Equa
         self.appId = appId
         self.deviceIds = deviceIds
         self.isFreeProvisioningProfile = isFreeProvisioningProfile
+        self.isTeamProfile = isTeamProfile
     }
 
     public init(from decoder: Decoder) throws {
@@ -254,6 +258,7 @@ public struct ListedProvisioningProfile: Decodable, Sendable, Identifiable, Equa
         self.appId = try container.decodeIfPresent(AppIDPayload.self, forKey: .appId)
         self.deviceIds = try container.decodeIfPresent([String].self, forKey: .deviceIds)
         self.isFreeProvisioningProfile = try container.decodeIfPresent(Bool.self, forKey: .isFreeProvisioningProfile)
+        self.isTeamProfile = try container.decodeIfPresent(Bool.self, forKey: .isTeamProfile)
     }
 }
 
