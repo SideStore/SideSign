@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import AnisetteKit
 
 public enum SideSignLogging {
     public private(set) nonisolated(unsafe) static var isLoggingEnabled = false
@@ -15,6 +16,7 @@ public enum SideSignLogging {
         defer { debugLog("[SideSign] setLogging(\(enabled)) completed") }
         debugLog("[SideSign] setLogging(\(enabled)) invoked")
         isLoggingEnabled = enabled
+        AnisetteKitLogging.setLogging(enabled)
     }
 }
 
