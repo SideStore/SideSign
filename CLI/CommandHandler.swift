@@ -696,6 +696,8 @@ public enum CommandHandler {
             try handleAuthSelectTeamID(teamID: teamID)
         case .logout(let sessionPath, let teamID, let clearMachine):
             try handleAuthLogout(sessionPath: sessionPath, teamID: teamID, clearMachine: clearMachine)
+        case .logoutAll(let clearMachine):
+            try handleAuthLogoutAll(clearMachine: clearMachine)
         case .status(let sessionPath, let password, let encryptPassword, let teamID):
             try handleAuthStatus(sessionPath: sessionPath, password: password, encryptPassword: encryptPassword, teamID: teamID)
         case .relogin(let options):
@@ -759,16 +761,76 @@ public enum CommandHandler {
     }
 
     private static func handleAuthLogout(sessionPath: String?, teamID: String?, clearMachine: Bool) throws {
-        let sessionURL = sessionPath.map { URL(fileURLWithPath: $0) } ?? SessionManager.url(for: teamID)
-        try SessionManager.clear(at: sessionURL)
+        let defaultURL = SessionManager.defaultSessionURL
+        let defaultData = try? Data(contentsOf: defaultURL)
+
+        var resolvedTeamID = teamID
+        var matchingTeamSessionURL: URL? = nil
+
         if let tID = teamID {
-            let teamMachine = DeviceDataManager.url(for: tID)
-            try? DeviceDataManager.clear(at: teamMachine)
+            matchingTeamSessionURL = SessionManager.url(for: tID)
+        } else if sessionPath == nil {
+            // Plain logout: find if active session.dat matches any team session
+            if let defData = defaultData {
+                for entry in SessionManager.listSessions() where entry.teamID != nil {
+                    if let tData = try? Data(contentsOf: entry.url), tData == defData {
+                        resolvedTeamID = entry.teamID
+                        matchingTeamSessionURL = entry.url
+                        break
+                    }
+                }
+            }
         }
-        print("Logged out. Session cleared at \(sessionURL.path).")
+
+        let targetSessionURL = sessionPath.map { URL(fileURLWithPath: $0) } ?? matchingTeamSessionURL ?? defaultURL
+
+        if targetSessionURL != defaultURL,
+           let defData = defaultData,
+           let targetData = try? Data(contentsOf: targetSessionURL),
+           defData == targetData {
+            try? SessionManager.clear(at: defaultURL)
+            let teamLabel = resolvedTeamID.map { "team '\($0)'" } ?? "this session"
+            print("Active session was using \(teamLabel) and was also cleared.")
+        }
+
+        try SessionManager.clear(at: targetSessionURL)
+        print("Logged out. Session cleared at \(targetSessionURL.path).")
+
+        if let tID = resolvedTeamID {
+            let teamMachine = DeviceDataManager.url(for: tID)
+            if clearMachine {
+                try? DeviceDataManager.clear(at: teamMachine)
+                print("Team device data (\(teamMachine.lastPathComponent)) cleared.")
+            }
+        }
+
         if clearMachine {
             try DeviceDataManager.clear(at: nil)
             print("Local device data (machine.dat) cleared.")
+        }
+    }
+
+    private static func handleAuthLogoutAll(clearMachine: Bool) throws {
+        let sessions = SessionManager.listSessions()
+        var clearedCount = 0
+
+        for s in sessions {
+            if FileManager.default.fileExists(atPath: s.url.path) {
+                try? FileManager.default.removeItem(at: s.url)
+                clearedCount += 1
+            }
+        }
+        if FileManager.default.fileExists(atPath: SessionManager.defaultSessionURL.path) {
+            try? FileManager.default.removeItem(at: SessionManager.defaultSessionURL)
+            clearedCount += 1
+        }
+        AnisetteDataManager.shared.clearCache()
+
+        print("All sessions cleared (\(clearedCount) session file(s) removed).")
+
+        if clearMachine {
+            try DeviceDataManager.clearAll()
+            print("All local device data (machine files) cleared.")
         }
     }
 

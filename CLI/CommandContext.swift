@@ -371,6 +371,7 @@ public enum PortalRequestContext: Sendable {
     case selectTeam(index: String?)
     case selectTeamID(teamID: String)
     case logout(sessionPath: String?, teamID: String?, clearMachine: Bool)
+    case logoutAll(clearMachine: Bool)
     case status(sessionPath: String?, password: String?, encryptPassword: String?, teamID: String?)
     case relogin(PortalOptions)
     case login(PortalLoginOptions)

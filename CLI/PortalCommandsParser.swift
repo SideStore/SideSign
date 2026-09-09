@@ -14,7 +14,8 @@ public enum PortalCommandsParser {
     Usage:
       sidesign dev login --apple-id <email> [--password <pwd>] [--session <path>] [--encrypt-password <pwd>]
       sidesign dev relogin [--session <path>] [--password <pwd>]
-      sidesign dev logout [--session <path>] [--clear-machine]
+      sidesign dev logout [--team <id>] [--session <path>] [--clear-machine]
+      sidesign dev logout-all [--clear-machine]
       sidesign dev status [--session <path>] [--password <pwd>]
       sidesign dev list
       sidesign dev select-team <index>
@@ -33,6 +34,7 @@ public enum PortalCommandsParser {
         "selectTeam":   ["select-team", "set-team"],
         "selectTeamID": ["select-team-id", "set-team-id"],
         "logout":       ["logout"],
+        "logoutAll":    ["logout-all", "logoutall"],
         "status":       ["status"],
         "relogin":      ["relogin"],
         "login":        ["login"],
@@ -556,6 +558,9 @@ public enum PortalCommandsParser {
         case actions["logout"]:
             let clearMachine = subArgs.contains("--clear-machine") || subArgs.contains("--all") || subArgs.contains("-a")
             return .logout(sessionPath: portalOpts.sessionPath, teamID: portalOpts.teamID, clearMachine: clearMachine)
+        case actions["logoutAll"]:
+            let clearMachine = subArgs.contains("--clear-machine") || subArgs.contains("--all") || subArgs.contains("-a")
+            return .logoutAll(clearMachine: clearMachine)
         case actions["status"]:
             return .status(sessionPath: portalOpts.sessionPath, password: portalOpts.password, encryptPassword: portalOpts.encryptPassword, teamID: portalOpts.teamID)
         case actions["relogin"]:

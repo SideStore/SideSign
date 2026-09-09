@@ -152,6 +152,19 @@ public struct DeviceDataManager: Sendable {
         }
     }
 
+    public static func clearAll() throws {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: defaultDirectory, includingPropertiesForKeys: nil) else {
+            return
+        }
+        for file in files {
+            let name = file.lastPathComponent
+            if name == Constants.DeviceData.defaultFileName ||
+               (name.hasPrefix(Constants.DeviceData.filePrefix) && name.hasSuffix(Constants.DeviceData.fileExtension)) {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
+    }
+
     private static func deriveKey(from password: String, salt: Data) throws -> SymmetricKey {
         guard let passwordData = password.data(using: .utf8),
               let derived = CryptoUtilities.pbkdf2SHA256(
