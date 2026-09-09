@@ -86,9 +86,9 @@ public enum PortalCommandsParser {
 
     private static let appGroupFlags: [String: [String]] = [
         "name":             ["--name", "-n"],
-        "groupID":          ["--group-id", "-g", "-id", "-gid"],
+        "groupID":          ["--group-id", "-g", "-gid"],
         "appID":            ["--app-id", "-a", "-aid"],
-        "id":               ["--id", "-i"]
+        "id":               ["--id", "-i", "-id"]
     ]
 
     private static let profileFlags: [String: [String]] = [
@@ -349,9 +349,9 @@ public enum PortalCommandsParser {
             var groupID: String?
             while idx < subArgs.count {
                 switch subArgs[idx] {
-                case flags["name"]:     name    = nextVal()
-                case flags["groupID"]:  groupID = nextVal()
-                default:                break
+                case flags["name"]:                  name    = nextVal()
+                case flags["groupID"], flags["id"]:  groupID = nextVal()
+                default:                             break
                 }
                 idx += 1
             }
@@ -364,9 +364,9 @@ public enum PortalCommandsParser {
             var groupIDStr: String?
             while idx < subArgs.count {
                 switch subArgs[idx] {
-                case flags["appID"]:    appIDStr   = nextVal()
-                case flags["groupID"]:  groupIDStr = nextVal()
-                default:                break
+                case flags["appID"]:                 appIDStr   = nextVal()
+                case flags["groupID"], flags["id"]:  groupIDStr = nextVal()
+                default:                             break
                 }
                 idx += 1
             }
@@ -379,9 +379,9 @@ public enum PortalCommandsParser {
             var groupIDStr: String?
             while idx < subArgs.count {
                 switch subArgs[idx] {
-                case flags["name"]:     name       = nextVal()
-                case flags["groupID"]:  groupIDStr = nextVal()
-                default:                break
+                case flags["name"]:                  name       = nextVal()
+                case flags["id"], flags["groupID"]:  groupIDStr = nextVal()
+                default:                             break
                 }
                 idx += 1
             }
@@ -393,8 +393,8 @@ public enum PortalCommandsParser {
             var groupIDStr: String?
             while idx < subArgs.count {
                 switch subArgs[idx] {
-                case flags["groupID"]:  groupIDStr = nextVal()
-                default:                break
+                case flags["id"], flags["groupID"]:  groupIDStr = nextVal()
+                default:                             break
                 }
                 idx += 1
             }
