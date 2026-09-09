@@ -761,6 +761,10 @@ public enum CommandHandler {
     private static func handleAuthLogout(sessionPath: String?, teamID: String?, clearMachine: Bool) throws {
         let sessionURL = sessionPath.map { URL(fileURLWithPath: $0) } ?? SessionManager.url(for: teamID)
         try SessionManager.clear(at: sessionURL)
+        if let tID = teamID {
+            let teamMachine = DeviceDataManager.url(for: tID)
+            try? DeviceDataManager.clear(at: teamMachine)
+        }
         print("Logged out. Session cleared at \(sessionURL.path).")
         if clearMachine {
             try DeviceDataManager.clear(at: nil)
@@ -1284,7 +1288,7 @@ public enum CommandHandler {
         sessionURL: URL,
         options: PortalOptions
     ) async throws {
-        let (anisetteData, _, _, _) = try await fetchAnisetteHeaders(options: options)
+        let (anisetteData, _, targetDataURL, _) = try await fetchAnisetteHeaders(options: options)
 
         let pwd: String
         if let p = password, !p.isEmpty {
@@ -1313,12 +1317,28 @@ public enum CommandHandler {
                 discoveredTeamID = firstTeam.identifier
                 let teamURL = SessionManager.url(for: firstTeam.identifier)
                 try SessionManager.save(authSession, to: teamURL, password: options.encryptPassword)
+
+                let teamMachineURL = DeviceDataManager.url(for: firstTeam.identifier)
+                if FileManager.default.fileExists(atPath: targetDataURL.path) && targetDataURL != teamMachineURL {
+                    let mData = try Data(contentsOf: targetDataURL)
+                    try mData.write(to: teamMachineURL, options: .atomic)
+                }
+
+                try? SessionManager.setActiveSession(forTeamID: firstTeam.identifier)
                 print("Default team '\(firstTeam.name)' (\(firstTeam.identifier)) associated with session: \(teamURL.path)")
             }
         }
 
         if discoveredTeamID == nil {
             try SessionManager.save(authSession, to: sessionURL, password: options.encryptPassword)
+            if let teamID = options.teamID {
+                let teamMachineURL = DeviceDataManager.url(for: teamID)
+                if FileManager.default.fileExists(atPath: targetDataURL.path) && targetDataURL != teamMachineURL {
+                    let mData = try Data(contentsOf: targetDataURL)
+                    try mData.write(to: teamMachineURL, options: .atomic)
+                }
+                try? SessionManager.setActiveSession(forTeamID: teamID)
+            }
             print("Authentication successful! Session saved to: \(sessionURL.path)")
         }
 
