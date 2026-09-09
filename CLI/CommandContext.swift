@@ -31,6 +31,7 @@ public struct SignContext: Sendable {
     public let teamID: String?
     public let entitlementsPath: String?
     public let outputPath: String?
+    public let infoPlistPath: String?
 
     public init(
         targetPath: String,
@@ -40,7 +41,8 @@ public struct SignContext: Sendable {
         bundleID: String? = nil,
         teamID: String? = nil,
         entitlementsPath: String? = nil,
-        outputPath: String? = nil
+        outputPath: String? = nil,
+        infoPlistPath: String? = nil
     ) {
         self.targetPath = targetPath
         self.p12Path = p12Path
@@ -50,6 +52,7 @@ public struct SignContext: Sendable {
         self.teamID = teamID
         self.entitlementsPath = entitlementsPath
         self.outputPath = outputPath
+        self.infoPlistPath = infoPlistPath
     }
 }
 
@@ -69,11 +72,21 @@ public struct InspectContext: Sendable {
     public let targetPath: String
     public let dumpEntitlements: Bool
     public let dumpRequirements: Bool
+    public let dumpPlist: Bool
+    public let outputPath: String?
 
-    public init(targetPath: String, dumpEntitlements: Bool = false, dumpRequirements: Bool = false) {
+    public init(
+        targetPath: String,
+        dumpEntitlements: Bool = false,
+        dumpRequirements: Bool = false,
+        dumpPlist: Bool = false,
+        outputPath: String? = nil
+    ) {
         self.targetPath = targetPath
         self.dumpEntitlements = dumpEntitlements
         self.dumpRequirements = dumpRequirements
+        self.dumpPlist = dumpPlist
+        self.outputPath = outputPath
     }
 }
 

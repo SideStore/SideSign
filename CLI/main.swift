@@ -36,6 +36,7 @@ private enum FlagRegistry {
         "usingTeam":        ["--using-team", "-t"],
         "usingTeamID":      ["--using-team-id", "--use-team", "-tid"],
         "entitlements":     ["--entitlements", "-e"],
+        "infoPlist":        ["--info-plist", "--plist", "-pl"],
         "output":           ["--output", "-o"]
     ]
 
@@ -46,7 +47,9 @@ private enum FlagRegistry {
 
     static let inspect: [String: [String]] = [
         "entitlements":     ["--entitlements", "-e"],
-        "requirements":     ["--requirements", "-r"]
+        "requirements":     ["--requirements", "-r"],
+        "plist":            ["--plist", "--info-plist", "-pl"],
+        "output":           ["--output", "-o"]
     ]
 
     static let extensions: [String: [String]] = [
@@ -198,6 +201,7 @@ private func parseSignContext(args: [String]) throws -> SignContext {
     var teamID: String?
     var entitlementsPath: String?
     var outputPath: String?
+    var infoPlistPath: String?
 
     var i = 0
     func nextVal() -> String? {
@@ -216,6 +220,7 @@ private func parseSignContext(args: [String]) throws -> SignContext {
         case flags["usingTeam"]:        teamID           = try CommandHandler.resolveTeamIDFromIndex(nextVal())
         case flags["usingTeamID"]:      teamID           = try nextVal().map { try CommandHandler.validateAndResolveTeamID($0) }
         case flags["entitlements"]:     entitlementsPath = nextVal()
+        case flags["infoPlist"]:        infoPlistPath    = nextVal()
         case flags["output"]:           outputPath       = nextVal()
         default:
             if !arg.hasPrefix("-") && targetPath == nil {
@@ -240,7 +245,8 @@ private func parseSignContext(args: [String]) throws -> SignContext {
         bundleID: bundleID,
         teamID: teamID,
         entitlementsPath: entitlementsPath,
-        outputPath: outputPath
+        outputPath: outputPath,
+        infoPlistPath: infoPlistPath
     )
 }
 
@@ -272,22 +278,41 @@ private func parseInspectContext(args: [String]) throws -> InspectContext {
     var targetPath: String?
     var dumpEntitlements = false
     var dumpRequirements = false
+    var dumpPlist = false
+    var outputPath: String?
 
-    for arg in args {
+    var idx = 0
+    func nextVal() -> String? {
+        guard idx + 1 < args.count, !args[idx + 1].hasPrefix("-") else { return nil }
+        idx += 1
+        return args[idx]
+    }
+
+    while idx < args.count {
+        let arg = args[idx]
         switch arg {
         case flags["entitlements"]: dumpEntitlements = true
         case flags["requirements"]: dumpRequirements = true
+        case flags["plist"]:        dumpPlist        = true
+        case flags["output"]:       outputPath       = nextVal()
         default:
             if !arg.hasPrefix("-") && targetPath == nil {
                 targetPath = arg
             }
         }
+        idx += 1
     }
 
     guard let target = targetPath else {
         throw CLIError.missingRequiredArgument("No target specified for display/inspection.")
     }
-    return InspectContext(targetPath: target, dumpEntitlements: dumpEntitlements, dumpRequirements: dumpRequirements)
+    return InspectContext(
+        targetPath: target,
+        dumpEntitlements: dumpEntitlements,
+        dumpRequirements: dumpRequirements,
+        dumpPlist: dumpPlist,
+        outputPath: outputPath
+    )
 }
 
 private func parseProfileContext(args: [String]) throws -> ProfileContext {

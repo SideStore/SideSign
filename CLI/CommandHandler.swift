@@ -103,6 +103,17 @@ public enum CommandHandler {
                 appURL = targetURL
             }
 
+            if let infoPlistPath = context.infoPlistPath {
+                let customPlistURL = URL(fileURLWithPath: infoPlistPath)
+                guard FileManager.default.fileExists(atPath: customPlistURL.path) else {
+                    throw CLIError.invalidArgument("Specified Info.plist does not exist at: \(infoPlistPath)")
+                }
+                let customData = try Data(contentsOf: customPlistURL)
+                let destPlistURL = appURL.appendingPathComponent("Info.plist")
+                try customData.write(to: destPlistURL)
+                print("[Info.plist] Injected custom Info.plist from: \(infoPlistPath)")
+            }
+
             var profiles: [ProvisioningProfile] = []
             if let profilePath = context.profilePath {
                 let profURL = URL(fileURLWithPath: profilePath)
@@ -111,6 +122,22 @@ public enum CommandHandler {
                     profiles.append(profile)
                 } else {
                     throw CLIError.executionFailed("Could not parse provisioning profile at \(profilePath)")
+                }
+            }
+
+            let targetBundleID = context.bundleID ?? profiles.first?.bundleIdentifier
+            if let newBundleID = targetBundleID, !newBundleID.contains("*") {
+                let infoPlistURL = appURL.appendingPathComponent("Info.plist")
+                if FileManager.default.fileExists(atPath: infoPlistURL.path),
+                   let data = try? Data(contentsOf: infoPlistURL),
+                   var plist = (try? PropertyListSerialization.propertyList(from: data, options: [], format: nil)) as? [String: Any],
+                   let currentBundleID = (plist["CFBundleIdentifier"] as? String) ?? (plist["bundle-identifier"] as? String),
+                   currentBundleID != newBundleID {
+                    plist["CFBundleIdentifier"] = newBundleID
+                    if let updatedData = try? PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0) {
+                        try updatedData.write(to: infoPlistURL)
+                        print("[Info.plist] Updated CFBundleIdentifier from '\(currentBundleID)' to '\(newBundleID)'")
+                    }
                 }
             }
 
@@ -224,6 +251,26 @@ public enum CommandHandler {
         var isDir: ObjCBool = false
         _ = FileManager.default.fileExists(atPath: targetURL.path, isDirectory: &isDir)
 
+        if context.dumpPlist && (targetURL.pathExtension.lowercased() == "plist" || targetURL.lastPathComponent == "Info.plist") {
+            guard FileManager.default.fileExists(atPath: targetURL.path) else {
+                throw CLIError.invalidArgument("File does not exist at \(targetURL.path)")
+            }
+            let rawData = try Data(contentsOf: targetURL)
+            let plistObj = try PropertyListSerialization.propertyList(from: rawData, options: [], format: nil)
+            let xmlData = try PropertyListSerialization.data(fromPropertyList: plistObj, format: .xml, options: 0)
+            if let outputPath = context.outputPath {
+                let outURL = URL(fileURLWithPath: outputPath)
+                try xmlData.write(to: outURL)
+                print("Info.plist saved to: \(outURL.path)")
+            } else {
+                guard let string = String(data: xmlData, encoding: .utf8) else {
+                    throw CLIError.executionFailed("Unable to decode Info.plist as UTF-8 string.")
+                }
+                print(string)
+            }
+            return
+        }
+
         let isIPA = targetURL.pathExtension.lowercased() == "ipa"
         let isApp = targetURL.pathExtension.lowercased() == "app"
 
@@ -235,6 +282,27 @@ public enum CommandHandler {
             let appURL = isIPA ? try FileManager.default.unzipAppBundle(at: targetURL, to: workingDir) : targetURL
             guard let app = AppBundle(fileURL: appURL) else {
                 throw CLIError.executionFailed("Unable to parse AppBundle at \(appURL.path)")
+            }
+
+            if context.dumpPlist {
+                let infoPlistURL = appURL.appendingPathComponent("Info.plist")
+                guard FileManager.default.fileExists(atPath: infoPlistURL.path) else {
+                    throw CLIError.executionFailed("Info.plist not found in bundle at \(appURL.path)")
+                }
+                let rawData = try Data(contentsOf: infoPlistURL)
+                let plistObj = try PropertyListSerialization.propertyList(from: rawData, options: [], format: nil)
+                let xmlData = try PropertyListSerialization.data(fromPropertyList: plistObj, format: .xml, options: 0)
+                if let outputPath = context.outputPath {
+                    let outURL = URL(fileURLWithPath: outputPath)
+                    try xmlData.write(to: outURL)
+                    print("Info.plist saved to: \(outURL.path)")
+                } else {
+                    guard let string = String(data: xmlData, encoding: .utf8) else {
+                        throw CLIError.executionFailed("Unable to decode Info.plist as UTF-8 string.")
+                    }
+                    print(string)
+                }
+                return
             }
 
             let executableName = app.bundle.infoDictionary?["CFBundleExecutable"] as? String ?? app.name
@@ -266,6 +334,9 @@ public enum CommandHandler {
                 }
             }
         } else {
+            if context.dumpPlist {
+                throw CLIError.invalidArgument("--plist can only be used with an IPA, .app bundle, or .plist file.")
+            }
             let execURL: URL
             if isDir.boolValue {
                 guard let exec = CodeSignKit.MachOParser.findExecutable(at: targetURL) else {
