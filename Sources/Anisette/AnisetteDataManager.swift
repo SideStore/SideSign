@@ -258,7 +258,11 @@ public final class AnisetteDataManager: @unchecked Sendable {
     }
 
     public static var defaultBaseDirectory: URL {
-        #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
+        #if os(tvOS)
+        if let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            return caches.appendingPathComponent(Constants.Anisette.defaultBaseDirName, isDirectory: true)
+        }
+        #elseif os(iOS) || os(watchOS) || os(visionOS)
         if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             return appSupport.appendingPathComponent(Constants.Anisette.defaultBaseDirName, isDirectory: true)
         }

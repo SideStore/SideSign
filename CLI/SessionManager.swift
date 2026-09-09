@@ -36,7 +36,12 @@ public enum SessionStorageError: LocalizedError, Sendable {
 public struct SessionManager: Sendable {
 
     public static var defaultSessionDirectory: URL {
-        #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
+        #if os(tvOS)
+        if let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            return caches.appendingPathComponent(Constants.Anisette.defaultBaseDirName, isDirectory: true)
+                .appendingPathComponent(Constants.Session.sessionSubdirectory, isDirectory: true)
+        }
+        #elseif os(iOS) || os(watchOS) || os(visionOS)
         if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             return appSupport.appendingPathComponent(Constants.Anisette.defaultBaseDirName, isDirectory: true)
                 .appendingPathComponent(Constants.Session.sessionSubdirectory, isDirectory: true)
