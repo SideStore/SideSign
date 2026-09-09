@@ -1433,14 +1433,11 @@ public enum CommandHandler {
         var session = authSession.session
         session.anisetteData = anisetteData
         let portal = DeveloperPortal()
-
         do {
             try await operation(portal, account, session)
         } catch {
             if case DeveloperPortalError.incorrectCredentials(let cause) = error {
                 throw CLIError.executionFailed("Authentication session expired or credentials changed: \(cause ?? error.localizedDescription)\nPlease re-authenticate by running: sidesign dev relogin")
-            } else if error.localizedDescription.contains("401") || error.localizedDescription.localizedCaseInsensitiveContains("unauthorized") || error.localizedDescription.localizedCaseInsensitiveContains("session") {
-                throw CLIError.executionFailed("Developer portal session has expired or credentials have changed.\nPlease re-authenticate by running: sidesign dev relogin")
             }
             throw error
         }
