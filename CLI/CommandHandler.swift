@@ -1482,11 +1482,13 @@ public enum CommandHandler {
             return false
         }
 
+        let targetIdentifier = existingData?.identifier ?? UUID()
+
         if options.enableFailover {
             let res = try await provider.fetchAnisetteDataWithFailover(
                 servers: failoverURLs,
                 startIndex: options.startIndex,
-                identifier: existingData?.identifier ?? UUID(),
+                identifier: targetIdentifier,
                 existingAdiBlob: existingData?.adiBlob,
                 onError: errorHandler,
                 onSuccess: { winURL in
@@ -1497,7 +1499,7 @@ public enum CommandHandler {
             newAdiPb = res.newAdiBlob
         } else {
             let res = try await provider.fetchAnisetteData(
-                identifier: existingData?.identifier ?? UUID(),
+                identifier: targetIdentifier,
                 existingAdiBlob: existingData?.adiBlob,
                 onError: errorHandler
             )
@@ -1514,7 +1516,7 @@ public enum CommandHandler {
             }
             if let p = devPass {
                 let newData = DeviceData(
-                    identifier: existingData?.identifier ?? UUID(),
+                    identifier: targetIdentifier,
                     adiBlob: freshBlob,
                     machineID: anisetteData.machineID,
                     localUserID: anisetteData.localUserID
