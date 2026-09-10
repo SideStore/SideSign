@@ -7,28 +7,41 @@
 //
 
 import Foundation
+import AnisetteKit
 
 public enum Constants {
-    public static let protocolVersion         = "QH65B2"
-    public static let servicesProtocolVersion = "v1"
-    public static let grandSlamAuthHeader     = "1.0.1"
-    public static let grandSlamService        = "iCloud"
-    public static let clientID                = "XABBG36SBA"
-    public static let appIDKey                = "ba2ec180e6ca6e6c6a542255453b24d6e6e5b2be0cc48bc1b0d8ad64cfe0228f"
-    public static let userAgent               = "AuthKit/1 (Macintosh; OS X 26.6) (com.apple.dt.Xcode/26.0)"
-    public static let authKitUserAgent        = "AuthKit/1 (Macintosh; OS X 26.6)"
-    public static let xcodeUserAgent          = "Xcode"
-    public static let authApp                 = "com.apple.gs.xcode.auth"
+    // https://gsa.apple.com/grandslam/GsService2
+    public enum GrandSlam {
+        public static let service        = "iCloud"
+        public static let headerVersion  = "1.0.1"
+        public static let authApp        = "com.apple.gs.xcode.auth"
+        public static let userAgent      = "AuthKit/1 (Macintosh; OS X 26.6) (com.apple.dt.Xcode/26.0)"
+    }
+
+    // https://idmsa.apple.com/appleauth/auth/devices
+    public enum AppleAuth {
+        public static let appIDKey   = "ba2ec180e6ca6e6c6a542255453b24d6e6e5b2be0cc48bc1b0d8ad64cfe0228f"
+        public static let userAgent  = "AuthKit/1 (Macintosh; OS X 26.6)"
+    }
+
+    // https://developerservices2.apple.com/services/
+    public enum DeveloperServices {
+        public static let clientID                = "XABBG36SBA"
+        public static let protocolVersion         = "QH65B2"
+        public static let servicesProtocolVersion = "v1"
+        public static let userAgent               = "Xcode"
+    }
+
     public static let defaultAccountRepairMessage = "Your Apple ID requires account verification or terms agreement.\n" + 
                                                     "Please sign in to developer.apple.com or appleid.apple.com."
 
     public enum URLs {
-        private static let servicesBase      = "https://developerservices2.apple.com/services/\(Constants.protocolVersion)"
+        private static let servicesBase             = "https://developerservices2.apple.com/services/\(Constants.DeveloperServices.protocolVersion)"
 
         // Auth
         public static let developerAccount          = URL(string: "https://developer.apple.com/account")!
         public static let developerServicesBase     = URL(string: "\(servicesBase)/")!
-        public static let developerServicesV1Base   = URL(string: "https://developerservices2.apple.com/services/\(Constants.servicesProtocolVersion)/")!
+        public static let developerServicesV1Base   = URL(string: "https://developerservices2.apple.com/services/\(Constants.DeveloperServices.servicesProtocolVersion)/")!
         public static let grandSlamAuth             = URL(string: "https://gsa.apple.com/grandslam/GsService2")!
         public static let grandSlamValidate         = URL(string: "https://gsa.apple.com/grandslam/GsService2/validate")!
         public static let trustedDevice             = URL(string: "https://gsa.apple.com/auth/verify/trusteddevice")!
@@ -108,13 +121,39 @@ public enum Constants {
     }
 
     public enum Anisette {
-        public static let defaultBaseDirName          = ".sidesign"
-        public static let localLibsSubdirectory       = "local-libs"
-        public static let remoteLibsSubdirectory      = "remote-libs"
-        public static let provisioningSubdirectory    = "provisioning"
+        public static let defaultClientInfo     = AnisetteConstants.defaultClientInfo
+        public static let defaultUserAgent      = AnisetteConstants.defaultUserAgent
+
+        public enum URLs {
+            public static let grandSlamLookup   = AnisetteConstants.URLs.grandSlamLookup
+        }
+
+        public enum Headers {
+            public static let machineID        = AnisetteConstants.Headers.machineID
+            public static let oneTimePassword  = AnisetteConstants.Headers.oneTimePassword
+            public static let localUserID      = AnisetteConstants.Headers.localUserID
+            public static let routingInfo      = AnisetteConstants.Headers.routingInfo
+            public static let deviceID         = AnisetteConstants.Headers.deviceID
+            public static let serialNumber     = AnisetteConstants.Headers.serialNumber
+            public static let clientInfo       = AnisetteConstants.Headers.clientInfo
+            public static let userAgent        = AnisetteConstants.Headers.userAgent
+            public static let clientTime       = AnisetteConstants.Headers.clientTime
+            public static let locale           = AnisetteConstants.Headers.locale
+            public static let timeZone         = AnisetteConstants.Headers.timeZone
+        }
+
+        public enum Libraries {
+            public static let requiredNames = AnisetteConstants.Libraries.requiredNames
+        }
+
+        public static let defaultBaseDirName                    = ".sidesign"
+        public static let localLibsSubdirectory                 = "local-libs"
+        public static let remoteLibsSubdirectory                = "remote-libs"
+        public static let provisioningSubdirectory              = "provisioning"
         public static let cachingPollingDelayNanoseconds: UInt64 = 200_000_000
-        public static let remoteCacheDuration: TimeInterval = 30.0
+        public static let remoteCacheDuration: TimeInterval     = 30.0
         public static let serverValidationTimeout: TimeInterval = 3.0
+        public static let remoteRequestTimeout: TimeInterval    = 15.0
     }
 }
 

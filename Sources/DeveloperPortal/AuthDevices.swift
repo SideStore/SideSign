@@ -17,7 +17,7 @@ public extension DeveloperPortal {
         var request = URLRequest(url: Constants.URLs.appleAuthDevices)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(Constants.authKitUserAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(Constants.AppleAuth.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue(session.authToken, forHTTPHeaderField: "X-Apple-Session-Token")
         request.setValue("X-Apple-GS-Token \(session.authToken)", forHTTPHeaderField: "Authorization")
         request.setValue(session.anisetteData.oneTimePassword, forHTTPHeaderField: "X-Apple-I-MD")
@@ -27,7 +27,7 @@ public extension DeveloperPortal {
 
         let clientInfoDict: [String: String] = [
             "deviceUdid": session.anisetteData.machineID,
-            "appIdKey": Constants.appIDKey
+            "appIdKey": Constants.AppleAuth.appIDKey
         ]
         if let clientInfoData = try? JSONSerialization.data(withJSONObject: clientInfoDict),
            let clientInfoStr = String(data: clientInfoData, encoding: .utf8) {
@@ -105,7 +105,7 @@ public extension DeveloperPortal {
         var request = URLRequest(url: deleteURL)
         request.httpMethod = "DELETE"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(Constants.authKitUserAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(Constants.AppleAuth.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue(session.authToken, forHTTPHeaderField: "X-Apple-Session-Token")
         request.setValue("X-Apple-GS-Token \(session.authToken)", forHTTPHeaderField: "Authorization")
         request.setValue(session.anisetteData.oneTimePassword, forHTTPHeaderField: "X-Apple-I-MD")

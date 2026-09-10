@@ -355,17 +355,17 @@ public final class AnisetteDataManager: @unchecked Sendable {
 
     public static func validateAndCreateAnisetteData(from dictionary: [String: String]) throws -> AnisetteData {
         let requiredKeys: [String] = [
-            AnisetteConstants.Headers.machineID,
-            AnisetteConstants.Headers.oneTimePassword,
-            AnisetteConstants.Headers.localUserID,
-            AnisetteConstants.Headers.routingInfo,
-            AnisetteConstants.Headers.deviceID,
-            AnisetteConstants.Headers.serialNumber,
-            AnisetteConstants.Headers.clientInfo,
-            AnisetteConstants.Headers.userAgent,
-            AnisetteConstants.Headers.clientTime,
-            AnisetteConstants.Headers.locale,
-            AnisetteConstants.Headers.timeZone
+            Constants.Anisette.Headers.machineID,
+            Constants.Anisette.Headers.oneTimePassword,
+            Constants.Anisette.Headers.localUserID,
+            Constants.Anisette.Headers.routingInfo,
+            Constants.Anisette.Headers.deviceID,
+            Constants.Anisette.Headers.serialNumber,
+            Constants.Anisette.Headers.clientInfo,
+            Constants.Anisette.Headers.userAgent,
+            Constants.Anisette.Headers.clientTime,
+            Constants.Anisette.Headers.locale,
+            Constants.Anisette.Headers.timeZone
         ]
 
         var missingKeys: [String] = []
@@ -383,17 +383,17 @@ public final class AnisetteDataManager: @unchecked Sendable {
         }
 
         return AnisetteData(
-            machineID: dictionary[AnisetteConstants.Headers.machineID]!,
-            oneTimePassword: dictionary[AnisetteConstants.Headers.oneTimePassword]!,
-            localUserID: dictionary[AnisetteConstants.Headers.localUserID]!,
-            routingInfo: dictionary[AnisetteConstants.Headers.routingInfo]!,
-            deviceID: dictionary[AnisetteConstants.Headers.deviceID]!,
-            serialNumber: dictionary[AnisetteConstants.Headers.serialNumber]!,
-            clientInfo: dictionary[AnisetteConstants.Headers.clientInfo]!,
-            userAgent: dictionary[AnisetteConstants.Headers.userAgent]!,
-            clientTime: dictionary[AnisetteConstants.Headers.clientTime]!,
-            locale: dictionary[AnisetteConstants.Headers.locale]!,
-            timeZone: dictionary[AnisetteConstants.Headers.timeZone]!
+            machineID: dictionary[Constants.Anisette.Headers.machineID]!,
+            oneTimePassword: dictionary[Constants.Anisette.Headers.oneTimePassword]!,
+            localUserID: dictionary[Constants.Anisette.Headers.localUserID]!,
+            routingInfo: dictionary[Constants.Anisette.Headers.routingInfo]!,
+            deviceID: dictionary[Constants.Anisette.Headers.deviceID]!,
+            serialNumber: dictionary[Constants.Anisette.Headers.serialNumber]!,
+            clientInfo: dictionary[Constants.Anisette.Headers.clientInfo]!,
+            userAgent: dictionary[Constants.Anisette.Headers.userAgent]!,
+            clientTime: dictionary[Constants.Anisette.Headers.clientTime]!,
+            locale: dictionary[Constants.Anisette.Headers.locale]!,
+            timeZone: dictionary[Constants.Anisette.Headers.timeZone]!
         )
     }
 
@@ -433,7 +433,7 @@ public final class AnisetteDataManager: @unchecked Sendable {
             }
         }
 
-        let clientInfo = headers?.clientInfo ?? AnisetteConstants.defaultClientInfo
+        let clientInfo = headers?.clientInfo ?? Constants.Anisette.defaultClientInfo
         let client = try await getClient(for: resolvedMode, clientInfo: clientInfo)
 
         do {
@@ -477,6 +477,9 @@ public final class AnisetteDataManager: @unchecked Sendable {
             return try AnisetteClient(
                 provisioningDir: provisioningDir,
                 clientInfo: clientInfo,
+                userAgent: Constants.Anisette.defaultUserAgent,
+                lookupURL: Constants.Anisette.URLs.grandSlamLookup,
+                requiredLibraries: Constants.Anisette.Libraries.requiredNames,
                 provider: RemoteAnisetteDataProvider(serverURL: server)
             )
 
@@ -486,13 +489,16 @@ public final class AnisetteDataManager: @unchecked Sendable {
             return try AnisetteClient(
                 provisioningDir: targetProvDir,
                 clientInfo: clientInfo,
+                userAgent: Constants.Anisette.defaultUserAgent,
+                lookupURL: Constants.Anisette.URLs.grandSlamLookup,
+                requiredLibraries: Constants.Anisette.Libraries.requiredNames,
                 libraryDirectoryResolver: { libDir }
             )
 
         case .remoteODA(let sourceURL, let fallbackURL):
             try FileManager.default.createDirectory(at: libsDir, withIntermediateDirectories: true)
             try FileManager.default.createDirectory(at: provisioningDir, withIntermediateDirectories: true)
-            if !AnisetteClient.validateLibrariesExist(at: libsDir) {
+            if !AnisetteClient.validateLibrariesExist(at: libsDir, requiredLibraries: Constants.Anisette.Libraries.requiredNames) {
                 try await setupFromRemote(serverSourceURL: sourceURL, fallbackODAURL: fallbackURL, clientInfo: clientInfo)
             }
             return try await ensureProviderLoaded(clientInfo: clientInfo)
@@ -603,7 +609,7 @@ public final class AnisetteDataManager: @unchecked Sendable {
         return try JSONDecoder().decode(ODAInfo.self, from: odaData)
     }
 
-    public func downloadAndCacheLibs(from oda: ODAInfo, targetDirectory: URL? = nil, clientInfo: String = AnisetteConstants.defaultClientInfo) async throws {
+    public func downloadAndCacheLibs(from oda: ODAInfo, targetDirectory: URL? = nil, clientInfo: String = Constants.Anisette.defaultClientInfo) async throws {
         guard !isCaching else {
             while isCaching {
                 try await Task.sleep(nanoseconds: Constants.Anisette.cachingPollingDelayNanoseconds)
@@ -635,13 +641,16 @@ public final class AnisetteDataManager: @unchecked Sendable {
 
         try fm.unzipArchive(at: tempZipURL, to: libDir)
 
-        guard AnisetteClient.validateLibrariesExist(at: libDir) else {
-            throw AnisetteError.missingRequiredLibs(AnisetteConstants.Libraries.requiredNames)
+        guard AnisetteClient.validateLibrariesExist(at: libDir, requiredLibraries: Constants.Anisette.Libraries.requiredNames) else {
+            throw AnisetteError.missingRequiredLibs(Constants.Anisette.Libraries.requiredNames)
         }
 
         self.localProvider = try AnisetteClient(
             provisioningDir: prov,
             clientInfo: clientInfo,
+            userAgent: Constants.Anisette.defaultUserAgent,
+            lookupURL: Constants.Anisette.URLs.grandSlamLookup,
+            requiredLibraries: Constants.Anisette.Libraries.requiredNames,
             libraryDirectoryResolver: { libDir }
         )
     }
@@ -668,9 +677,9 @@ public final class AnisetteDataManager: @unchecked Sendable {
         return downloadedData
     }
 
-    public func setupFromRemote(serverSourceURL: URL, fallbackODAURL: URL? = nil, force: Bool = false, clientInfo: String = AnisetteConstants.defaultClientInfo) async throws {
+    public func setupFromRemote(serverSourceURL: URL, fallbackODAURL: URL? = nil, force: Bool = false, clientInfo: String = Constants.Anisette.defaultClientInfo) async throws {
         let targetLibDir = remoteLibsDir
-        if !force && AnisetteClient.validateLibrariesExist(at: targetLibDir) {
+        if !force && AnisetteClient.validateLibrariesExist(at: targetLibDir, requiredLibraries: Constants.Anisette.Libraries.requiredNames) {
             debugLog("[AnisetteDataManager] Remote libraries already present in \(targetLibDir.path), using cache.")
             return
         }
@@ -678,7 +687,7 @@ public final class AnisetteDataManager: @unchecked Sendable {
         try await downloadAndCacheLibs(from: odaInfo, targetDirectory: targetLibDir, clientInfo: clientInfo)
     }
 
-    public func ensureProviderLoaded(clientInfo: String = AnisetteConstants.defaultClientInfo) async throws -> AnisetteClient {
+    public func ensureProviderLoaded(clientInfo: String = Constants.Anisette.defaultClientInfo) async throws -> AnisetteClient {
         if let existing = self.localProvider {
             return existing
         }
@@ -686,10 +695,13 @@ public final class AnisetteDataManager: @unchecked Sendable {
         let libDir = libsDir
         let prov = provisioningDir
 
-        if AnisetteClient.validateLibrariesExist(at: libDir) {
+        if AnisetteClient.validateLibrariesExist(at: libDir, requiredLibraries: Constants.Anisette.Libraries.requiredNames) {
             let provider = try AnisetteClient(
                 provisioningDir: prov,
                 clientInfo: clientInfo,
+                userAgent: Constants.Anisette.defaultUserAgent,
+                lookupURL: Constants.Anisette.URLs.grandSlamLookup,
+                requiredLibraries: Constants.Anisette.Libraries.requiredNames,
                 libraryDirectoryResolver: { libDir }
             )
             self.localProvider = provider

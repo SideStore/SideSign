@@ -28,7 +28,7 @@ public extension DeveloperPortal {
             "icscrec": true,
             "pbe": false,
             "prkgen": true,
-            "svct": Constants.grandSlamService,
+            "svct": Constants.GrandSlam.service,
             "loc": anisetteData.locale,
             "X-Apple-Locale": anisetteData.locale,
             "X-Apple-I-MD": anisetteData.oneTimePassword,
@@ -260,7 +260,7 @@ public extension DeveloperPortal {
             throw ServerError.missingKey(key: "c", jsonPayload: prettyJSONString(from: decryptedDictionary))
         }
 
-        let app = Constants.authApp
+        let app = Constants.GrandSlam.authApp
         guard let checksum = CryptoUtilities.hmacSHA256(key: sessionKey, strings: ["apptokens", dsid, app]) else {
             debugLog("[SideSign] Failed to compute apptokens checksum")
             throw DeveloperPortalError.authenticationHandshakeFailed(cause: "Failed to compute apptokens checksum")
@@ -295,7 +295,7 @@ public extension DeveloperPortal {
         let requestURL = Constants.URLs.grandSlamAuth
 
         let parameters: [String: any Sendable] = [
-            "Header": ["Version": Constants.grandSlamAuthHeader],
+            "Header": ["Version": Constants.GrandSlam.headerVersion],
             "Request": requestParameters
         ]
 
@@ -309,7 +309,7 @@ public extension DeveloperPortal {
             "Content-Type": "text/x-xml-plist",
             "X-MMe-Client-Info": anisetteData.clientInfo,
             "Accept": "*/*",
-            "User-Agent": Constants.userAgent
+            "User-Agent": Constants.GrandSlam.userAgent
         ]
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
 
@@ -870,8 +870,8 @@ public extension DeveloperPortal {
             "Accept": "application/x-buddyml",
             "Accept-Language": "en-us",
             "Content-Type": "application/x-plist",
-            "User-Agent": Constants.xcodeUserAgent,
-            "X-Apple-App-Info": Constants.authApp,
+            "User-Agent": Constants.DeveloperServices.userAgent,
+            "X-Apple-App-Info": Constants.GrandSlam.authApp,
             "X-Xcode-Version": context.xcodeVersion,
             "X-Apple-Identity-Token": encodedIdentityToken,
             "X-Apple-I-MD": a.oneTimePassword,

@@ -63,7 +63,7 @@ public struct RemoteAnisetteDataProvider: AnisetteDataProvider, Sendable {
         if !adiPb.isEmpty {
             if let v3HeadersURL = URL(string: "\(baseURL)/\(Constants.URLs.v3GetHeaders)") {
                 var postReq = URLRequest(url: v3HeadersURL)
-                postReq.timeoutInterval = 15
+                postReq.timeoutInterval = Constants.Anisette.remoteRequestTimeout
                 postReq.httpMethod = "POST"
                 postReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 postReq.cachePolicy = .reloadIgnoringLocalCacheData
@@ -89,7 +89,7 @@ public struct RemoteAnisetteDataProvider: AnisetteDataProvider, Sendable {
         // 2. Fallback to legacy v1 root GET
         var request = URLRequest(url: serverURL)
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.timeoutInterval = 15
+        request.timeoutInterval = Constants.Anisette.remoteRequestTimeout
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResp = response as? HTTPURLResponse, httpResp.isSuccess else {

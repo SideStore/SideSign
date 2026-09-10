@@ -257,8 +257,8 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
                                    resultCodeHandler: ((Int, String) -> Error?)? = nil) async throws -> T
     {
         var parameters: [String: any Sendable] = [
-            "clientId": Constants.clientID,
-            "protocolVersion": Constants.protocolVersion,
+            "clientId": Constants.DeveloperServices.clientID,
+            "protocolVersion": Constants.DeveloperServices.protocolVersion,
             "requestId": UUID().uuidString.uppercased()
         ]
 
@@ -274,7 +274,7 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
             options: 0
         )
 
-        let url = URL(string: "\(requestURL.absoluteString)?clientId=\(Constants.clientID)")!
+        let url = URL(string: "\(requestURL.absoluteString)?clientId=\(Constants.DeveloperServices.clientID)")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.httpBody = bodyData
@@ -282,10 +282,10 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
         let a = apiSession.anisetteData
         let headers: [String: String] = [
             "Content-Type": "text/x-xml-plist",
-            "User-Agent": Constants.xcodeUserAgent,
+            "User-Agent": Constants.DeveloperServices.userAgent,
             "Accept": "text/x-xml-plist",
             "Accept-Language": "en-us",
-            "X-Apple-App-Info": Constants.authApp,
+            "X-Apple-App-Info": Constants.GrandSlam.authApp,
             "X-Xcode-Version": apiSession.xcodeVersion,
             "X-Apple-I-Identity-Id": apiSession.dsid,
             "X-Apple-GS-Token": apiSession.authToken,
@@ -385,10 +385,10 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
 
         var headers: [String: String] = [
             "Content-Type": "application/vnd.api+json",
-            "User-Agent": Constants.xcodeUserAgent,
+            "User-Agent": Constants.DeveloperServices.userAgent,
             "Accept": "application/vnd.api+json",
             "Accept-Language": "en-us",
-            "X-Apple-App-Info": Constants.authApp,
+            "X-Apple-App-Info": Constants.GrandSlam.authApp,
             "X-Xcode-Version": apiSession.xcodeVersion,
             "X-Apple-I-Identity-Id": apiSession.dsid,
             "X-Apple-GS-Token": apiSession.authToken
