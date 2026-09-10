@@ -309,7 +309,8 @@ public extension DeveloperPortal {
             "Content-Type": "text/x-xml-plist",
             "X-MMe-Client-Info": anisetteData.clientInfo,
             "Accept": "*/*",
-            "User-Agent": Constants.GrandSlam.userAgent
+            "User-Agent": Constants.GrandSlam.userAgent,
+            "Connection": "close"
         ]
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
 
@@ -883,7 +884,8 @@ public extension DeveloperPortal {
             "X-Apple-I-SRL-NO": a.serialNumber,
             "X-Apple-I-Client-Time": a.clientTime,
             "X-Apple-Locale": a.locale,
-            "X-Apple-I-TimeZone": a.timeZone
+            "X-Apple-I-TimeZone": a.timeZone,
+            "Connection": "close"
         ]
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         return request
