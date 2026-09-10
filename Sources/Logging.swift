@@ -107,6 +107,27 @@ func sanitizeTokens(_ tokensDictionary: [String: any Sendable]) -> [String: any 
     return sanitized
 }
 
+public func sanitizeHeadersForLogging(_ headers: [String: String]) -> [String: String] {
+    var sanitized = headers
+    let sensitiveKeys: Set<String> = [
+        "authorization",
+        "proxy-authorization",
+        "x-apple-session-token",
+        "x-apple-gs-token",
+        "x-apple-identity-token",
+        "cookie",
+        "set-cookie"
+    ]
+    for (key, val) in headers {
+        if sensitiveKeys.contains(key.lowercased()) {
+            let suffix = val.count > 4 ? val.suffix(4) : val[...]
+            sanitized[key] = "••••••••\(suffix)"
+        }
+    }
+    return sanitized
+}
+
+
 private func formatPayloadString(_ str: String) -> String {
     let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
     if trimmed.hasPrefix("<") {

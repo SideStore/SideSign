@@ -314,6 +314,10 @@ public extension DeveloperPortal {
         ]
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
 
+        if let allHeaders = request.allHTTPHeaderFields {
+            verboseLog("[SideSign] sendAuthenticationRequest HTTP headers: \(prettyJSONString(from: sanitizeHeadersForLogging(allHeaders)))")
+        }
+
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(for: request)
@@ -655,6 +659,10 @@ public extension DeveloperPortal {
         var request = makeTwoFactorAuthRequest(url: Constants.URLs.trustedDevice, context: context)
         request.httpMethod = "GET"
 
+        if let allHeaders = request.allHTTPHeaderFields {
+            verboseLog("[SideSign] sendTrustedDevice2FACodeRequest HTTP headers: \(prettyJSONString(from: sanitizeHeadersForLogging(allHeaders)))")
+        }
+
         let (data, response) = try await session.data(for: request)
         let httpResponse = response as? HTTPURLResponse
         let statusCode = httpResponse?.safeStatusCode ?? 0
@@ -692,6 +700,10 @@ public extension DeveloperPortal {
         request.httpBody = try PropertyListSerialization.data(fromPropertyList: [
             "serverInfo": serverInfo
         ], format: .xml, options: 0)
+
+        if let allHeaders = request.allHTTPHeaderFields {
+            verboseLog("[SideSign] sendPhone2FACodeRequest HTTP headers: \(prettyJSONString(from: sanitizeHeadersForLogging(allHeaders)))")
+        }
 
         let (data, response) = try await session.data(for: request)
         let httpResponse = response as? HTTPURLResponse
@@ -776,6 +788,10 @@ public extension DeveloperPortal {
         var verifyRequest = makeTwoFactorAuthRequest(url: Constants.URLs.grandSlamValidate, context: context)
         verifyRequest.setValue(code, forHTTPHeaderField: "security-code")
 
+        if let allHeaders = verifyRequest.allHTTPHeaderFields {
+            verboseLog("[SideSign] validateTrustedDevice2FACode HTTP headers: \(prettyJSONString(from: sanitizeHeadersForLogging(allHeaders)))")
+        }
+
         debugLog("[SideSign] Verifying trusted device security code...")
         let (verifyData, verifyResponse) = try await session.data(for: verifyRequest)
         let verifyHttpResponse = verifyResponse as? HTTPURLResponse
@@ -795,6 +811,10 @@ public extension DeveloperPortal {
             "securityCode.code": code,
             "serverInfo": ["mode": mode, "phoneNumber.id": phoneID]
         ], format: .xml, options: 0)
+
+        if let allHeaders = verifyRequest.allHTTPHeaderFields {
+            verboseLog("[SideSign] validatePhone2FACode HTTP headers: \(prettyJSONString(from: sanitizeHeadersForLogging(allHeaders)))")
+        }
 
         debugLog("[SideSign] Verifying secondary security code...")
         let (verifyData, verifyResponse) = try await session.data(for: verifyRequest)

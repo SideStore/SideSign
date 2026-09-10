@@ -34,6 +34,10 @@ public extension DeveloperPortal {
             request.setValue(clientInfoStr, forHTTPHeaderField: "X-Apple-I-FD-Client-Info")
         }
 
+        if let allHeaders = request.allHTTPHeaderFields {
+            verboseLog("[SideSign] fetchAuthDevices HTTP headers: \(prettyJSONString(from: sanitizeHeadersForLogging(allHeaders)))")
+        }
+
         do {
             let (data, response) = try await self.session.data(for: request)
             if let httpResp = response as? HTTPURLResponse, httpResp.isSuccess {
@@ -112,6 +116,10 @@ public extension DeveloperPortal {
         request.setValue(session.anisetteData.machineID, forHTTPHeaderField: "X-Apple-I-MD-M")
         request.setValue(String(session.anisetteData.routingInfo), forHTTPHeaderField: "X-Apple-I-MD-RINFO")
         request.setValue(session.anisetteData.localUserID, forHTTPHeaderField: "X-Apple-I-MD-LU")
+
+        if let allHeaders = request.allHTTPHeaderFields {
+            verboseLog("[SideSign] removeAuthDevice HTTP headers: \(prettyJSONString(from: sanitizeHeadersForLogging(allHeaders)))")
+        }
 
         do {
             let (_, response) = try await self.session.data(for: request)

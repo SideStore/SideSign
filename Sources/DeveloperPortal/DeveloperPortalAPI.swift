@@ -304,6 +304,9 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
 
         verboseLog("[SideSign] sendRequest: \(url.absoluteString)")
+        if let allHeaders = request.allHTTPHeaderFields {
+            verboseLog("[SideSign] sendRequest HTTP headers: \(prettyJSONString(from: sanitizeHeadersForLogging(allHeaders)))")
+        }
 
         let (data, response): (Data, URLResponse)
         do {
@@ -412,6 +415,9 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
 
         verboseLog("[SideSign] sendServicesRequest to: \(request.url?.absoluteString ?? "unknown URL")")
         verboseLog("[SideSign] sendServicesRequest parameters: \(additionalParameters ?? [:])")
+        if let allHeaders = request.allHTTPHeaderFields {
+            verboseLog("[SideSign] sendServicesRequest HTTP headers: \(prettyJSONString(from: sanitizeHeadersForLogging(allHeaders)))")
+        }
 
         let (data, response): (Data, URLResponse)
         do {
