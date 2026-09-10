@@ -47,3 +47,4 @@ iproxy*
 pair*
 *.*provision
 *.p12
+*.py
