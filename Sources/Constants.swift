@@ -11,7 +11,6 @@ import Foundation
 public enum Constants {
     public static let protocolVersion         = "QH65B2"
     public static let servicesProtocolVersion = "v1"
-    public static let authProtocolVersion     = "A1234"
     public static let grandSlamAuthHeader     = "1.0.1"
     public static let grandSlamService        = "iCloud"
     public static let clientID                = "XABBG36SBA"
@@ -30,19 +29,15 @@ public enum Constants {
         public static let developerAccount          = URL(string: "https://developer.apple.com/account")!
         public static let developerServicesBase     = URL(string: "\(servicesBase)/")!
         public static let developerServicesV1Base   = URL(string: "https://developerservices2.apple.com/services/\(Constants.servicesProtocolVersion)/")!
-        public static let appStoreConnectBase       = URL(string: "https://appstoreconnect.apple.com/iris/\(Constants.servicesProtocolVersion)/")!
         public static let grandSlamAuth             = URL(string: "https://gsa.apple.com/grandslam/GsService2")!
-        public static let grandSlamLookup           = URL(string: "https://gsa.apple.com/grandslam/GsService2/lookup")!
         public static let grandSlamValidate         = URL(string: "https://gsa.apple.com/grandslam/GsService2/validate")!
         public static let trustedDevice             = URL(string: "https://gsa.apple.com/auth/verify/trusteddevice")!
-        public static let trustedDeviceSecurityCode = URL(string: "https://gsa.apple.com/auth/verify/trusteddevice/securitycode")!
         public static let phoneBase                 = "https://gsa.apple.com/auth/verify/phone"
         public static func phonePutURL(mode: String = "sms") -> URL {
             URL(string: "\(phoneBase)/put?mode=\(mode)") ?? smsPut
         }
         public static let phoneSecurityCode         = URL(string: "\(phoneBase)/securitycode?referrer=/auth/verify/phone/put")!
         public static let smsPut                    = URL(string: "https://gsa.apple.com/auth/verify/phone/put?mode=sms")!
-        public static let smsSecurityCode           = URL(string: "https://gsa.apple.com/auth/verify/phone/securitycode?referrer=/auth/verify/phone/put")!
         public static let appleAuthDevices          = URL(string: "https://idmsa.apple.com/appleauth/auth/devices")!
 
         // Developer Portal Actions
@@ -78,18 +73,9 @@ public enum Constants {
         public static let deleteProvisioningProfile         = URL(string: "\(servicesBase)/ios/deleteProvisioningProfile.action")!
 
         // Anisette Endpoints
-        public static let v3ClientInfo          = "v3/client_info"
         public static let v3GetHeaders          = "v3/get_headers"
         public static let v3ProvisioningSession = "v3/provisioning_session"
     }
-
-    public enum SecondaryAuthType: String, Sendable, CaseIterable {
-        case secondaryAuth = "secondaryAuth"
-        case sms           = "sms"
-        case voice         = "voice"
-        case phone         = "phone"
-    }
-
 
     public enum Session {
         public static let autoMagic: [UInt8]         = [0x53, 0x53, 0x30, 0x31] // "SS01"
@@ -100,7 +86,6 @@ public enum Constants {
         public static let pbkdf2Rounds               = 100_000
         public static let keyOutputLength            = 32
         public static let defaultDirName             = "sidesign"
-        public static let defaultConfigDir           = ".config"
         public static let sessionSubdirectory        = "session"
         public static let defaultFileName            = "session.dat"
         public static let filePrefix                 = "session_"
@@ -141,12 +126,10 @@ public enum GrandSlamAuthErrorCodes {
     public static let tooManyCodesRequested               = -20102
     public static let tooManyAttempts                     = -21668
     public static let rateLimited                         = -22411
-    public static let serverError                         = -22416
 }
 
 public enum DeveloperPortalResultCodes {
     public static let success                             = 0
-    public static let serviceMappingUnavailable           = 1003
     public static let invalidCertificateRequest           = 3250
     public static let appGroupDoesNotExist                = 35
     public static let deviceAlreadyRegistered             = 35
