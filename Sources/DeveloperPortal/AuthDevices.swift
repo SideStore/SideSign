@@ -13,11 +13,12 @@ public extension DeveloperPortal {
     func fetchAuthDevices(session: Session) async throws -> [AuthDevice] {
         debugLog("[SideSign] fetchAuthDevices starting for dsid: \(session.dsid)...")
 
+        let h = customHeaders
         // 1. Try idmsa devices endpoint
         var request = URLRequest(url: Constants.URLs.appleAuthDevices)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(Constants.AppleAuth.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(h.appleAuth.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue(session.authToken, forHTTPHeaderField: "X-Apple-Session-Token")
         request.setValue("X-Apple-GS-Token \(session.authToken)", forHTTPHeaderField: "Authorization")
         request.setValue(session.anisetteData.oneTimePassword, forHTTPHeaderField: "X-Apple-I-MD")
@@ -27,7 +28,7 @@ public extension DeveloperPortal {
 
         let clientInfoDict: [String: String] = [
             "deviceUdid": session.anisetteData.machineID,
-            "appIdKey": Constants.AppleAuth.appIDKey
+            "appIdKey": h.appleAuth.appIDKey
         ]
         if let clientInfoData = try? JSONSerialization.data(withJSONObject: clientInfoDict),
            let clientInfoStr = String(data: clientInfoData, encoding: .utf8) {
@@ -109,7 +110,7 @@ public extension DeveloperPortal {
         var request = URLRequest(url: deleteURL)
         request.httpMethod = "DELETE"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(Constants.AppleAuth.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(customHeaders.appleAuth.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue(session.authToken, forHTTPHeaderField: "X-Apple-Session-Token")
         request.setValue("X-Apple-GS-Token \(session.authToken)", forHTTPHeaderField: "Authorization")
         request.setValue(session.anisetteData.oneTimePassword, forHTTPHeaderField: "X-Apple-I-MD")

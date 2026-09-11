@@ -219,13 +219,21 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
 
     public static let shared = DeveloperPortal()
 
+    public var customHeaders: SideSignHeaders {
+        get { headersLock.withLock { cachedCustomHeaders } }
+        set { headersLock.withLock { cachedCustomHeaders = newValue } }
+    }
+    private let headersLock = NSLock()
+    private nonisolated(unsafe) var cachedCustomHeaders: SideSignHeaders
+
     public let baseURL         = Constants.URLs.developerServicesBase
     public let servicesBaseURL = Constants.URLs.developerServicesV1Base
 
     let session: URLSession
 
-    public init(session: URLSession = .shared) {
+    public init(session: URLSession = .shared, customHeaders: SideSignHeaders = SideSignHeaders()) {
         self.session = session
+        self.cachedCustomHeaders = customHeaders
     }
 
     func formatDate(_ date: Date) -> String {
@@ -256,9 +264,10 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
                                    team: Team? = nil,
                                    resultCodeHandler: ((Int, String) -> Error?)? = nil) async throws -> T
     {
+        let h = customHeaders
         var parameters: [String: any Sendable] = [
-            "clientId": Constants.DeveloperServices.clientID,
-            "protocolVersion": Constants.DeveloperServices.protocolVersion,
+            "clientId": h.developerServices.clientID,
+            "protocolVersion": h.developerServices.protocolVersion,
             "requestId": UUID().uuidString.uppercased()
         ]
 
@@ -274,7 +283,7 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
             options: 0
         )
 
-        let url = URL(string: "\(requestURL.absoluteString)?clientId=\(Constants.DeveloperServices.clientID)")!
+        let url = URL(string: "\(requestURL.absoluteString)?clientId=\(h.developerServices.clientID)")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.httpBody = bodyData
@@ -282,10 +291,10 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
         let a = apiSession.anisetteData
         let headers: [String: String] = [
             "Content-Type": "text/x-xml-plist",
-            "User-Agent": Constants.DeveloperServices.userAgent,
+            "User-Agent": h.developerServices.userAgent,
             "Accept": "text/x-xml-plist",
             "Accept-Language": "en-us",
-            "X-Apple-App-Info": Constants.GrandSlam.authApp,
+            "X-Apple-App-Info": h.grandSlam.authApp,
             "X-Xcode-Version": apiSession.xcodeVersion,
             "X-Apple-I-Identity-Id": apiSession.dsid,
             "X-Apple-GS-Token": apiSession.authToken,
@@ -386,12 +395,13 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
         request.httpBody = bodyData
         request.setValue(methodOverride, forHTTPHeaderField: "X-HTTP-Method-Override")
 
+        let h = customHeaders
         var headers: [String: String] = [
             "Content-Type": "application/vnd.api+json",
-            "User-Agent": Constants.DeveloperServices.userAgent,
+            "User-Agent": h.developerServices.userAgent,
             "Accept": "application/vnd.api+json",
             "Accept-Language": "en-us",
-            "X-Apple-App-Info": Constants.GrandSlam.authApp,
+            "X-Apple-App-Info": h.grandSlam.authApp,
             "X-Xcode-Version": apiSession.xcodeVersion,
             "X-Apple-I-Identity-Id": apiSession.dsid,
             "X-Apple-GS-Token": apiSession.authToken

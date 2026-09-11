@@ -28,7 +28,7 @@ public extension DeveloperPortal {
             "icscrec": true,
             "pbe": false,
             "prkgen": true,
-            "svct": Constants.GrandSlam.service,
+            "svct": customHeaders.grandSlam.service,
             "loc": anisetteData.locale,
             "X-Apple-Locale": anisetteData.locale,
             "X-Apple-I-MD": anisetteData.oneTimePassword,
@@ -260,7 +260,7 @@ public extension DeveloperPortal {
             throw ServerError.missingKey(key: "c", jsonPayload: prettyJSONString(from: decryptedDictionary))
         }
 
-        let app = Constants.GrandSlam.authApp
+        let app = customHeaders.grandSlam.authApp
         guard let checksum = CryptoUtilities.hmacSHA256(key: sessionKey, strings: ["apptokens", dsid, app]) else {
             debugLog("[SideSign] Failed to compute apptokens checksum")
             throw DeveloperPortalError.authenticationHandshakeFailed(cause: "Failed to compute apptokens checksum")
@@ -293,9 +293,10 @@ public extension DeveloperPortal {
 
     func sendAuthenticationRequest(parameters requestParameters: [String: any Sendable], anisetteData: AnisetteData) async throws -> [String: any Sendable] {
         let requestURL = Constants.URLs.grandSlamAuth
+        let h = customHeaders
 
         let parameters: [String: any Sendable] = [
-            "Header": ["Version": Constants.GrandSlam.headerVersion],
+            "Header": ["Version": h.grandSlam.headerVersion],
             "Request": requestParameters
         ]
 
@@ -309,7 +310,7 @@ public extension DeveloperPortal {
             "Content-Type": "text/x-xml-plist",
             "X-MMe-Client-Info": anisetteData.clientInfo,
             "Accept": "*/*",
-            "User-Agent": Constants.GrandSlam.userAgent,
+            "User-Agent": h.grandSlam.userAgent,
             "Connection": "close"
         ]
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
@@ -887,12 +888,13 @@ public extension DeveloperPortal {
 
         var request = URLRequest(url: url)
         let a = context.anisetteData
+        let h = customHeaders
         let headers: [String: String] = [
             "Accept": "application/x-buddyml",
             "Accept-Language": "en-us",
             "Content-Type": "application/x-plist",
-            "User-Agent": Constants.DeveloperServices.userAgent,
-            "X-Apple-App-Info": Constants.GrandSlam.authApp,
+            "User-Agent": h.developerServices.userAgent,
+            "X-Apple-App-Info": h.grandSlam.authApp,
             "X-Xcode-Version": context.xcodeVersion,
             "X-Apple-Identity-Token": encodedIdentityToken,
             "X-Apple-I-MD": a.oneTimePassword,
