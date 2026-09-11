@@ -54,10 +54,10 @@ public extension DeveloperPortal {
         ]
 
         let submitURL: URL
-        switch type {
+        switch type.category {
         case .distribution:
             submitURL = Constants.URLs.submitDistributionCSR
-        default:
+        case .development:
             submitURL = Constants.URLs.submitDevelopmentCSR
         }
 

@@ -16,13 +16,26 @@ public struct CertificateType: RawRepresentable, Sendable, Codable, Equatable, H
         case distribution
     }
 
-    public static let development  = CertificateType(rawValue: "development")
-    public static let distribution = CertificateType(rawValue: "distribution")
-    public static let developerID  = CertificateType(rawValue: "developer-id")
-    public static let macAppStore  = CertificateType(rawValue: "mac-appstore")
+    public static let development          = CertificateType(rawValue: "development")
+    public static let distribution         = CertificateType(rawValue: "distribution")
+    public static let iosDevelopment       = CertificateType(rawValue: "ios-development")
+    public static let iosDistribution      = CertificateType(rawValue: "ios-distribution")
+    public static let macDevelopment       = CertificateType(rawValue: "mac-development")
+    public static let macAppStore          = CertificateType(rawValue: "mac-appstore")
+    public static let macInstaller         = CertificateType(rawValue: "mac-installer")
+    public static let developerIDInstaller = CertificateType(rawValue: "developer-id-installer")
+    public static let developerID          = CertificateType(rawValue: "developer-id")
 
     public static let allCases: [CertificateType] = [
-        .development, .distribution, .developerID, .macAppStore
+        .development,
+        .distribution,
+        .iosDevelopment,
+        .iosDistribution,
+        .macDevelopment,
+        .macAppStore,
+        .macInstaller,
+        .developerIDInstaller,
+        .developerID
     ]
 
     public static var freeAccountCases: [CertificateType] {
@@ -39,21 +52,36 @@ public struct CertificateType: RawRepresentable, Sendable, Codable, Equatable, H
 
     public init?(argument: String) {
         switch argument.lowercased() {
-        case "development", "dev", "ios development", "apple development":
+        case "development", "dev", "apple development", "apple-development":
             self = .development
-        case "distribution", "dist", "ios distribution", "apple distribution":
+        case "distribution", "dist", "apple distribution", "apple-distribution":
             self = .distribution
-        case "developer-id", "developerid":
-            self = .developerID
-        case "mac-appstore", "macappstore":
+        case "ios-development", "ios-dev", "ios app development", "ios development", "iphone developer", "iphone-developer":
+            self = .iosDevelopment
+        case "ios-distribution", "ios-dist", "ios distribution", "iphone distribution", "adhoc", "ad-hoc", "ad hoc":
+            self = .iosDistribution
+        case "mac-development", "mac-dev", "mac development":
+            self = .macDevelopment
+        case "mac-appstore", "macappstore", "mac app distribution":
             self = .macAppStore
+        case "mac-installer", "mac-installer-distribution", "mac installer distribution":
+            self = .macInstaller
+        case "developer-id-installer", "developeridinstaller", "developer id installer":
+            self = .developerIDInstaller
+        case "developer-id", "developerid", "developer id application", "developer-id-application":
+            self = .developerID
         default:
             return nil
         }
     }
 
     public var isFreeAccountSupported: Bool {
-        self == .development
+        switch self {
+        case .development, .iosDevelopment, .macDevelopment:
+            return true
+        default:
+            return false
+        }
     }
 
     public var isPaidOnly: Bool {
@@ -62,9 +90,9 @@ public struct CertificateType: RawRepresentable, Sendable, Codable, Equatable, H
 
     public var category: Category {
         switch self {
-        case .development:
+        case .development, .iosDevelopment, .macDevelopment:
             return .development
-        case .distribution, .developerID, .macAppStore:
+        case .distribution, .iosDistribution, .macAppStore, .macInstaller, .developerID, .developerIDInstaller:
             return .distribution
         default:
             return .development
@@ -73,11 +101,16 @@ public struct CertificateType: RawRepresentable, Sendable, Codable, Equatable, H
 
     public var displayName: String {
         switch self {
-        case .development:  return "Apple Development"
-        case .distribution: return "Apple Distribution"
-        case .developerID:  return "Developer ID Application"
-        case .macAppStore:  return "Mac App Distribution"
-        default:            return rawValue.capitalized
+        case .development:          return "Apple Development"
+        case .distribution:         return "Apple Distribution"
+        case .iosDevelopment:       return "iOS App Development"
+        case .iosDistribution:      return "iOS Distribution (App Store Connect and Ad Hoc)"
+        case .macDevelopment:       return "Mac Development"
+        case .macAppStore:          return "Mac App Distribution"
+        case .macInstaller:         return "Mac Installer Distribution"
+        case .developerIDInstaller: return "Developer ID Installer"
+        case .developerID:          return "Developer ID Application"
+        default:                    return rawValue.capitalized
         }
     }
 
@@ -86,10 +119,9 @@ public struct CertificateType: RawRepresentable, Sendable, Codable, Equatable, H
     }
 
     public var submitEndpointAction: String {
-        switch self {
+        switch self.category {
         case .development:  return "ios/submitDevelopmentCSR.action"
         case .distribution: return "ios/submitDistributionCSR.action"
-        default:            return "ios/submitDevelopmentCSR.action"
         }
     }
 }
