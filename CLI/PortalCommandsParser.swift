@@ -23,7 +23,7 @@ public enum PortalCommandsParser {
       sidesign dev teams [--session <path>]
       sidesign dev devices list / register --name <name> --udid <udid> [--session <path>]
       sidesign dev auth-devices list / remove <device_id> / purge-anisette [--session <path>]
-      sidesign dev certs list / create / revoke --id <id> [--session <path>]
+      sidesign dev certs list / create [--type <type>] [--name <name>] [--output <path>] / revoke --id <id> [--session <path>]
       sidesign dev appids list / register --name <name> --bundle-id <id> / delete --id <id> [--session <path>]
       sidesign dev appgroups list / create --name <name> --group-id <id> / assign --app-id <id> --group-id <id> [--session <path>]
       sidesign dev profiles list / download --bundle-id <id> [--output <path>] / delete --id <id> [--session <path>]

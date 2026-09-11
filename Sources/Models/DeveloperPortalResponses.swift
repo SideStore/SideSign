@@ -132,6 +132,111 @@ struct ListCertificatesResponse: Decodable, Sendable {
     let resultString: String?
 }
 
+struct CertificatesResponseDeveloperServices2: Decodable, Sendable {
+    static let endpoint: X509Certificate.CertificateEndpoint = .developerServices2
+    var endpoint: X509Certificate.CertificateEndpoint { Self.endpoint }
+
+    struct Item: Decodable, Sendable {
+        let id: String
+        let type: String
+        let attributes: Attributes?
+
+        struct Attributes: Decodable, Sendable {
+            let certificateType: String?
+            let displayName: String?
+            let name: String?
+            let platform: String?
+            let serialNumber: String?
+            let certificateContent: String?
+            let expirationDate: String?
+            let machineName: String?
+            let machineId: String?
+            let requesterEmail: String?
+            let requesterFirstName: String?
+            let requesterLastName: String?
+            let csrContent: String?
+            let responseId: String?
+        }
+
+        func toCertificate() -> X509Certificate? {
+            guard let contentString = attributes?.certificateContent,
+                  let certData = Data(base64Encoded: contentString, options: .ignoreUnknownCharacters) else {
+                return nil
+            }
+            return X509Certificate(
+                data: certData,
+                identifier: id,
+                machineName: attributes?.machineName,
+                machineIdentifier: attributes?.machineId,
+                requesterEmail: attributes?.requesterEmail,
+                certificateType: attributes?.certificateType,
+                platform: attributes?.platform,
+                sourceEndpoint: .developerServices2
+            )
+        }
+    }
+
+    let data: [Item]?
+}
+
+struct CertificatesResponseDeveloperPortal: Decodable, Sendable {
+    static let endpoint: X509Certificate.CertificateEndpoint = .developerPortal
+    var endpoint: X509Certificate.CertificateEndpoint { Self.endpoint }
+
+    struct Item: Decodable, Sendable {
+        let id: String
+        let type: String
+        let attributes: Attributes?
+
+        struct Attributes: Decodable, Sendable {
+            let certificateType: String?
+            let displayName: String?
+            let name: String?
+            let platform: String?
+            let serialNumber: String?
+            let status: String?
+            let certificateContent: String?
+            let expirationDate: String?
+            let machineName: String?
+            let machineId: String?
+            let requesterEmail: String?
+            let requesterFirstName: String?
+            let requesterLastName: String?
+            let isManaged: Bool?
+            let autoRotationEnabled: Bool?
+            let certificateTypeId: String?
+            let certificateTypeName: String?
+            let platformName: String?
+            let ownerId: String?
+            let ownerName: String?
+            let requestedDate: String?
+            let serialNumDecimal: String?
+            let csrContent: String?
+            let responseId: String?
+        }
+
+        func toCertificate() -> X509Certificate? {
+            guard let contentString = attributes?.certificateContent,
+                  let certData = Data(base64Encoded: contentString, options: .ignoreUnknownCharacters) else {
+                return nil
+            }
+            return X509Certificate(
+                data: certData,
+                identifier: id,
+                machineName: attributes?.machineName,
+                machineIdentifier: attributes?.machineId,
+                requesterEmail: attributes?.requesterEmail,
+                certificateType: attributes?.certificateType,
+                platform: attributes?.platform,
+                sourceEndpoint: .developerPortal
+            )
+        }
+    }
+
+    let data: [Item]?
+}
+
+
 struct AddCertificateResponse: Decodable, Sendable {
     let resultCode: Int?
     let certRequest: X509CertificateDetails?

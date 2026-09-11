@@ -15,6 +15,23 @@ public extension X509Certificate {
         case machineName
         case machineIdentifier
         case requesterEmail
+        case certificateType
+        case platform
+        case sourceEndpoint
+    }
+
+    public enum CertificateEndpoint: String, Sendable, Codable, CaseIterable {
+        case developerServices2
+        case developerPortal
+
+        public var url: URL {
+            switch self {
+            case .developerServices2:
+                return Constants.URLs.certificatesDeveloperServices2
+            case .developerPortal:
+                return Constants.URLs.certificatesDeveloperPortal
+            }
+        }
     }
 
     subscript(key: MetadataKey) -> String? {
@@ -37,6 +54,18 @@ public extension X509Certificate {
     var requesterEmail: String? {
         get { self[.requesterEmail] }
         set { self[.requesterEmail] = newValue }
+    }
+    var certificateType: String? {
+        get { self[.certificateType] }
+        set { self[.certificateType] = newValue }
+    }
+    var platform: String? {
+        get { self[.platform] }
+        set { self[.platform] = newValue }
+    }
+    var sourceEndpoint: CertificateEndpoint? {
+        get { self[.sourceEndpoint].flatMap { CertificateEndpoint(rawValue: $0) } }
+        set { self[.sourceEndpoint] = newValue?.rawValue }
     }
 
     var name: String { commonName ?? subjectSummary }
@@ -68,12 +97,18 @@ public extension X509Certificate {
         identifier: String? = nil,
         machineName: String? = nil,
         machineIdentifier: String? = nil,
-        requesterEmail: String? = nil
+        requesterEmail: String? = nil,
+        certificateType: String? = nil,
+        platform: String? = nil,
+        sourceEndpoint: CertificateEndpoint? = nil
     ) {
         self.init(data: data)
         if let identifier { self.identifier = identifier }
         if let machineName { self.machineName = machineName }
         if let machineIdentifier { self.machineIdentifier = machineIdentifier }
         if let requesterEmail { self.requesterEmail = requesterEmail }
+        if let certificateType { self.certificateType = certificateType }
+        if let platform { self.platform = platform }
+        if let sourceEndpoint { self.sourceEndpoint = sourceEndpoint }
     }
 }

@@ -249,8 +249,9 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
     private let headersLock = NSLock()
     private nonisolated(unsafe) var cachedCustomHeaders: SideSignHeaders
 
-    public let baseURL         = Constants.URLs.developerServicesBase
-    public let servicesBaseURL = Constants.URLs.developerServicesV1Base
+    public let baseURL               = Constants.URLs.developerServicesBase
+    public let servicesBaseURL       = Constants.URLs.developerServicesV1Base
+    public let portalServicesBaseURL = Constants.URLs.developerPortalV1Base
 
     let session: URLSession
 

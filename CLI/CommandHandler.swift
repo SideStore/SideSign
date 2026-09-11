@@ -1143,7 +1143,8 @@ public enum CommandHandler {
                 if !SideSignLogging.isLoggingEnabled {
                     print("\nCertificates for team '\(team.name)':")
                     for c in certs {
-                        print("  * \(c.name) [ID: \(c.identifier ?? "unknown"), Serial: \(c.serialNumber)]")
+                        let typeInfo = c.certificateType.map { "[\($0)] " } ?? ""
+                        print("  * \(typeInfo)\(c.name) [ID: \(c.identifier ?? "unknown"), Serial: \(c.serialNumber)]")
                     }
                 }
             }

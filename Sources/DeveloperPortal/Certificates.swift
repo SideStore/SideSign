@@ -13,11 +13,22 @@ public extension DeveloperPortal {
 
     func fetchCertificates(for team: Team, session: Session) async throws -> [X509Certificate] {
         debugLog("[SideSign] fetchCertificates starting...")
-        verboseLog("[SideSign] Team: \(team.name) (\(team.identifier))")
+        verboseLog("[SideSign] Team: \(team.name) (\(team.identifier)), Type: \(team.type)")
 
-        let response: ListCertificatesResponse = try await sendRequest(url: Constants.URLs.listCertificates, session: session, team: team)
+        let endpoint: X509Certificate.CertificateEndpoint = (team.type != .free) ? .developerPortal : .developerServices2
 
-        let certificates = (response.certificates ?? []).compactMap { $0.toCertificate() }
+        var request = URLRequest(url: endpoint.url)
+        request.httpMethod = "GET"
+
+        let certificates: [X509Certificate]
+        switch endpoint {
+        case .developerPortal:
+            let response: CertificatesResponseDeveloperPortal = try await sendServicesRequest(request, session: session, team: team)
+            certificates = response.data?.compactMap { $0.toCertificate() } ?? []
+        case .developerServices2:
+            let response: CertificatesResponseDeveloperServices2 = try await sendServicesRequest(request, session: session, team: team)
+            certificates = response.data?.compactMap { $0.toCertificate() } ?? []
+        }
 
         debugLog("[SideSign] fetchCertificates completed with \(certificates.count) certificate(s)")
         if !certificates.isEmpty {
@@ -90,7 +101,7 @@ public extension DeveloperPortal {
                 if let serial, $0.serialNumber.caseInsensitiveCompare(serial) == .orderedSame { return true }
                 if let certId, $0.identifier == certId { return true }
                 return false
-            }) ?? allCerts.first else {
+            }) else {
                 debugLog("[SideSign] addCertificate error: Failed to retrieve new certificate from Developer Portal")
                 throw ServerError.badServerResponse(reason: "Failed to retrieve new certificate from Developer Portal", jsonPayload: "")
             }
@@ -107,7 +118,14 @@ public extension DeveloperPortal {
         debugLog("[SideSign] revokeCertificate starting...")
         verboseLog("[SideSign] Name: '\(certificate.name)', ID: '\(certIdentifier)', SN: \(certificate.serialNumber), Team: \(team.name)")
 
-        let url = URL(string: "certificates/\(certIdentifier)", relativeTo: servicesBaseURL)!
+        let endpoint: X509Certificate.CertificateEndpoint
+        if let source = certificate.sourceEndpoint {
+            endpoint = source
+        } else {
+            endpoint = (team.type != .free) ? .developerPortal : .developerServices2
+        }
+
+        let url = endpoint.url.appendingPathComponent(certIdentifier)
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
 
