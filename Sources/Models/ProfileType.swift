@@ -39,62 +39,37 @@ public struct ProfileType: RawRepresentable, Sendable, Codable, Equatable, Hasha
         .adHoc, .tvOSAdHoc, .appStore, .tvOSAppStore, .macAppStore, .developerID
     ]
 
-    /// Profiles supported by Free accounts
+    // Profiles supported by Free accounts
     public static var freeAccountCases: [ProfileType] {
         allCases.filter { $0.isFreeAccountSupported }
     }
 
-    /// Profiles supported exclusively by Paid accounts
+    // Profiles supported exclusively by Paid accounts
     public static var paidOnlyCases: [ProfileType] {
         allCases.filter { $0.isPaidOnly }
     }
 
     public init(rawValue: String) {
-        switch rawValue.lowercased() {
-        case "ios", "iphone", "ipad":
-            self.rawValue = "ios"
-        case "tvos", "appletv", "tv":
-            self.rawValue = "tvos"
-        case "macos", "mac", "osx":
-            self.rawValue = "mac"
-        case "visionos", "xr", "visionpro", "vision":
-            self.rawValue = "visionos"
-        case "driverkit":
-            self.rawValue = "driverkit"
-        case "adhoc", "ios-adhoc":
-            self.rawValue = "adhoc"
-        case "tvos-adhoc":
-            self.rawValue = "tvos-adhoc"
-        case "appstore", "ios-appstore", "store":
-            self.rawValue = "appstore"
-        case "tvos-appstore":
-            self.rawValue = "tvos-appstore"
-        case "mac-appstore":
-            self.rawValue = "mac-appstore"
-        case "developer-id", "developerid":
-            self.rawValue = "developer-id"
-        default:
-            self.rawValue = rawValue.lowercased()
-        }
+        self.rawValue = rawValue
     }
 
     public init?(argument: String) {
         switch argument.lowercased() {
-        case "ios", "iphone", "ipad":
+        case "ios", "ios development":
             self = .iOS
-        case "tvos", "appletv", "tv":
+        case "tvos", "tvos development":
             self = .tvOS
-        case "macos", "mac", "osx":
+        case "mac", "macos", "mac app development", "macos development":
             self = .macOS
-        case "visionos", "xr", "visionpro", "vision":
+        case "visionos", "visionos development":
             self = .visionOS
-        case "driverkit":
+        case "driverkit", "driverkit development":
             self = .driverKit
-        case "adhoc", "ios-adhoc":
+        case "adhoc":
             self = .adHoc
         case "tvos-adhoc":
             self = .tvOSAdHoc
-        case "appstore", "ios-appstore", "store":
+        case "appstore", "store":
             self = .appStore
         case "tvos-appstore":
             self = .tvOSAppStore

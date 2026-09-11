@@ -187,6 +187,7 @@ public struct ListedProvisioningProfile: Decodable, Sendable, Identifiable, Equa
     public let name: String
     public let status: String?
     public let type: String?
+    public let platform: String?
     public let uuid: UUID
     public let dateExpire: Date
     public let appId: AppIDPayload?
@@ -197,8 +198,14 @@ public struct ListedProvisioningProfile: Decodable, Sendable, Identifiable, Equa
     public var identifier: String? { provisioningProfileId }
     public var bundleIdentifier: String? { appId?.identifier }
     public var profileType: ProfileType? {
+        if let type, let parsed = ProfileType(argument: type) {
+            return parsed
+        }
+        if let platform, let parsed = ProfileType(argument: platform) {
+            return parsed
+        }
         guard let type else { return nil }
-        return ProfileType(argument: type) ?? ProfileType(rawValue: type)
+        return ProfileType(rawValue: type)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -206,6 +213,7 @@ public struct ListedProvisioningProfile: Decodable, Sendable, Identifiable, Equa
         case name
         case status
         case type
+        case platform = "proProPlatform"
         case uuid = "UUID"
         case dateExpire
         case appId
@@ -218,6 +226,7 @@ public struct ListedProvisioningProfile: Decodable, Sendable, Identifiable, Equa
                 name: String,
                 status: String? = nil,
                 type: String? = nil,
+                platform: String? = nil,
                 uuid: UUID,
                 dateExpire: Date,
                 appId: AppIDPayload? = nil,
@@ -229,6 +238,7 @@ public struct ListedProvisioningProfile: Decodable, Sendable, Identifiable, Equa
         self.name = name
         self.status = status
         self.type = type
+        self.platform = platform
         self.uuid = uuid
         self.dateExpire = dateExpire
         self.appId = appId
@@ -243,6 +253,7 @@ public struct ListedProvisioningProfile: Decodable, Sendable, Identifiable, Equa
         self.name = try container.decode(String.self, forKey: .name)
         self.status = try container.decodeIfPresent(String.self, forKey: .status)
         self.type = try container.decodeIfPresent(String.self, forKey: .type)
+        self.platform = try container.decodeIfPresent(String.self, forKey: .platform)
 
         let uuidString = try container.decode(String.self, forKey: .uuid)
         guard let parsedUUID = UUID(uuidString: uuidString) else {
