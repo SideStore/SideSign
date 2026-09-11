@@ -29,9 +29,13 @@ public extension DeveloperPortal {
         return certificates
     }
 
-    func addCertificate(machineName: String, to team: Team, session: Session) async throws -> KeyStore {
+    func addCertificate(machineName: String, type: CertificateType, to team: Team, session: Session) async throws -> KeyStore {
         debugLog("[SideSign] addCertificate starting...")
-        verboseLog("[SideSign] MachineName: '\(machineName)', Team: \(team.name)")
+        verboseLog("[SideSign] MachineName: '\(machineName)', Type: \(type.displayName), Team: \(team.name)")
+
+        if team.type == .free && type.isPaidOnly {
+            throw DeveloperPortalError.invalidParameters(cause: "Free Apple Developer accounts cannot create \(type.displayName) certificates. Only Apple Development certificates are supported.")
+        }
 
         let certRequest: CertificateRequest
         do {
@@ -49,8 +53,16 @@ public extension DeveloperPortal {
             "machineId": UUID().uuidString.uppercased()
         ]
 
+        let submitURL: URL
+        switch type {
+        case .distribution:
+            submitURL = Constants.URLs.submitDistributionCSR
+        default:
+            submitURL = Constants.URLs.submitDevelopmentCSR
+        }
+
         let response: AddCertificateResponse = try await sendRequest(
-            url: Constants.URLs.submitCSR,
+            url: submitURL,
             additionalParameters: parameters,
             session: session,
             team: team,

@@ -77,6 +77,8 @@ public enum Constants {
 
         public static let listCertificates          = URL(string: "\(servicesBase)/ios/listAllDevelopmentCerts.action")!
         public static let submitCSR                 = URL(string: "\(servicesBase)/ios/submitDevelopmentCSR.action")!
+        public static let submitDevelopmentCSR      = URL(string: "\(servicesBase)/ios/submitDevelopmentCSR.action")!
+        public static let submitDistributionCSR     = URL(string: "\(servicesBase)/ios/submitDistributionCSR.action")!
 
         public static let listProvisioningProfiles          = URL(string: "\(servicesBase)/ios/listProvisioningProfiles.action")!
         public static let downloadProvisioningProfile       = URL(string: "\(servicesBase)/ios/downloadTeamProvisioningProfile.action")!

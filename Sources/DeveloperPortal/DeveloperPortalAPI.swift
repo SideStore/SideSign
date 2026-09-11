@@ -106,7 +106,7 @@ public protocol DeveloperPortalAPI: Sendable {
     func fetchTeams(for account: Account, session: Session) async throws -> [Team]
     
     func fetchCertificates(for team: Team, session: Session) async throws -> [X509Certificate]
-    func addCertificate(machineName: String, to team: Team, session: Session) async throws -> KeyStore
+    func addCertificate(machineName: String, type: CertificateType, to team: Team, session: Session) async throws -> KeyStore
     func revokeCertificate(_ certificate: X509Certificate, for team: Team, session: Session) async throws -> Bool
     
     func fetchDevices(for team: Team, types: DeviceType, session: Session) async throws -> [Device]
@@ -183,6 +183,10 @@ public extension DeveloperPortalAPI {
             accountRepairHandler: accountRepairHandler, 
             verificationHandler: verificationHandler
         )
+    }
+
+    func addCertificate(machineName: String, type: CertificateType = .development, to team: Team, session: Session) async throws -> KeyStore {
+        try await addCertificate(machineName: machineName, type: type, to: team, session: session)
     }
 
     func fetchDevices(for team: Team, session: Session) async throws -> [Device] {
