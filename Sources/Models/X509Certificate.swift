@@ -15,8 +15,21 @@ public extension X509Certificate {
         case machineName
         case machineIdentifier
         case requesterEmail
+        case requesterFirstName
+        case requesterLastName
+        case displayName
         case certificateType
+        case certificateTypeName
+        case certificateTypeId
         case platform
+        case platformName
+        case isManaged
+        case status
+        case ownerName
+        case ownerId
+        case autoRotationEnabled
+        case requestedDate
+        case serialNumDecimal
         case sourceEndpoint
     }
 
@@ -55,13 +68,65 @@ public extension X509Certificate {
         get { self[.requesterEmail] }
         set { self[.requesterEmail] = newValue }
     }
+    var requesterFirstName: String? {
+        get { self[.requesterFirstName] }
+        set { self[.requesterFirstName] = newValue }
+    }
+    var requesterLastName: String? {
+        get { self[.requesterLastName] }
+        set { self[.requesterLastName] = newValue }
+    }
+    var displayName: String? {
+        get { self[.displayName] }
+        set { self[.displayName] = newValue }
+    }
     var certificateType: String? {
         get { self[.certificateType] }
         set { self[.certificateType] = newValue }
     }
+    var certificateTypeName: String? {
+        get { self[.certificateTypeName] }
+        set { self[.certificateTypeName] = newValue }
+    }
+    var certificateTypeId: String? {
+        get { self[.certificateTypeId] }
+        set { self[.certificateTypeId] = newValue }
+    }
     var platform: String? {
         get { self[.platform] }
         set { self[.platform] = newValue }
+    }
+    var platformName: String? {
+        get { self[.platformName] }
+        set { self[.platformName] = newValue }
+    }
+    var isManaged: Bool? {
+        get { self[.isManaged].flatMap { Bool($0) } }
+        set { self[.isManaged] = newValue.map { String($0) } }
+    }
+    var status: String? {
+        get { self[.status] }
+        set { self[.status] = newValue }
+    }
+    var ownerName: String? {
+        get { self[.ownerName] }
+        set { self[.ownerName] = newValue }
+    }
+    var ownerId: String? {
+        get { self[.ownerId] }
+        set { self[.ownerId] = newValue }
+    }
+    var autoRotationEnabled: Bool? {
+        get { self[.autoRotationEnabled].flatMap { Bool($0) } }
+        set { self[.autoRotationEnabled] = newValue.map { String($0) } }
+    }
+    var requestedDate: String? {
+        get { self[.requestedDate] }
+        set { self[.requestedDate] = newValue }
+    }
+    var serialNumDecimal: String? {
+        get { self[.serialNumDecimal] }
+        set { self[.serialNumDecimal] = newValue }
     }
     var sourceEndpoint: CertificateEndpoint? {
         get { self[.sourceEndpoint].flatMap { CertificateEndpoint(rawValue: $0) } }
@@ -98,8 +163,21 @@ public extension X509Certificate {
         machineName: String? = nil,
         machineIdentifier: String? = nil,
         requesterEmail: String? = nil,
+        requesterFirstName: String? = nil,
+        requesterLastName: String? = nil,
+        displayName: String? = nil,
         certificateType: String? = nil,
+        certificateTypeName: String? = nil,
+        certificateTypeId: String? = nil,
         platform: String? = nil,
+        platformName: String? = nil,
+        isManaged: Bool? = nil,
+        status: String? = nil,
+        ownerName: String? = nil,
+        ownerId: String? = nil,
+        autoRotationEnabled: Bool? = nil,
+        requestedDate: String? = nil,
+        serialNumDecimal: String? = nil,
         sourceEndpoint: CertificateEndpoint? = nil
     ) {
         self.init(data: data)
@@ -107,8 +185,21 @@ public extension X509Certificate {
         if let machineName { self.machineName = machineName }
         if let machineIdentifier { self.machineIdentifier = machineIdentifier }
         if let requesterEmail { self.requesterEmail = requesterEmail }
+        if let requesterFirstName { self.requesterFirstName = requesterFirstName }
+        if let requesterLastName { self.requesterLastName = requesterLastName }
+        if let displayName { self.displayName = displayName }
         if let certificateType { self.certificateType = certificateType }
+        if let certificateTypeName { self.certificateTypeName = certificateTypeName }
+        if let certificateTypeId { self.certificateTypeId = certificateTypeId }
         if let platform { self.platform = platform }
+        if let platformName { self.platformName = platformName }
+        if let isManaged { self.isManaged = isManaged }
+        if let status { self.status = status }
+        if let ownerName { self.ownerName = ownerName }
+        if let ownerId { self.ownerId = ownerId }
+        if let autoRotationEnabled { self.autoRotationEnabled = autoRotationEnabled }
+        if let requestedDate { self.requestedDate = requestedDate }
+        if let serialNumDecimal { self.serialNumDecimal = serialNumDecimal }
         if let sourceEndpoint { self.sourceEndpoint = sourceEndpoint }
     }
 }

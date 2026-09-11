@@ -169,6 +169,9 @@ struct CertificatesResponseDeveloperServices2: Decodable, Sendable {
                 machineName: attributes?.machineName,
                 machineIdentifier: attributes?.machineId,
                 requesterEmail: attributes?.requesterEmail,
+                requesterFirstName: attributes?.requesterFirstName,
+                requesterLastName: attributes?.requesterLastName,
+                displayName: attributes?.displayName,
                 certificateType: attributes?.certificateType,
                 platform: attributes?.platform,
                 sourceEndpoint: .developerServices2
@@ -226,8 +229,21 @@ struct CertificatesResponseDeveloperPortal: Decodable, Sendable {
                 machineName: attributes?.machineName,
                 machineIdentifier: attributes?.machineId,
                 requesterEmail: attributes?.requesterEmail,
+                requesterFirstName: attributes?.requesterFirstName,
+                requesterLastName: attributes?.requesterLastName,
+                displayName: attributes?.displayName,
                 certificateType: attributes?.certificateType,
+                certificateTypeName: attributes?.certificateTypeName,
+                certificateTypeId: attributes?.certificateTypeId,
                 platform: attributes?.platform,
+                platformName: attributes?.platformName,
+                isManaged: attributes?.isManaged,
+                status: attributes?.status,
+                ownerName: attributes?.ownerName,
+                ownerId: attributes?.ownerId,
+                autoRotationEnabled: attributes?.autoRotationEnabled,
+                requestedDate: attributes?.requestedDate,
+                serialNumDecimal: attributes?.serialNumDecimal,
                 sourceEndpoint: .developerPortal
             )
         }
