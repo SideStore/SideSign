@@ -126,13 +126,12 @@ public protocol DeveloperPortalAPI: Sendable {
     func assignAppGroups(_ appGroups: [AppGroup], to appID: AppID, team: Team, session: Session) async throws -> AppID
     func deleteAppGroup(_ appGroup: AppGroup, team: Team, session: Session) async throws -> Bool
 
-    func fetchProvisioningProfiles(includeTeamProfiles: Bool, for team: Team, session: Session) async throws -> [ListedProvisioningProfile]
+    func listProvisioningProfiles(includeTeamProfiles: Bool, for team: Team, session: Session) async throws -> [ListedProvisioningProfile]
     func createProvisioningProfile(name: String, appID: AppID, certificateIDs: [String], deviceIDs: [String], subPlatform: String?, team: Team, session: Session) async throws -> ProvisioningProfile
     func updateProvisioningProfile(profileID: String, name: String, appIDId: String, certificateIDs: [String], deviceIDs: [String], subPlatform: String?, team: Team, session: Session) async throws -> ProvisioningProfile
     func downloadProvisioningProfile(profileID: String, team: Team, session: Session) async throws -> ProvisioningProfile
-    func downloadProvisioningProfile(for appID: AppID, deviceType: DeviceType, team: Team, session: Session) async throws -> ProvisioningProfile
-    func deleteProvisioningProfile(_ profile: ListedProvisioningProfile, team: Team, session: Session) async throws -> Bool
-    func deleteProvisioningProfile(_ profile: ProvisioningProfile, team: Team, session: Session) async throws -> Bool
+    func downloadProvisioningProfile(for appID: AppID, isTeamProfile: Bool, deviceType: DeviceType, team: Team, session: Session) async throws -> ProvisioningProfile
+    func deleteProvisioningProfile(profileID: String, team: Team, session: Session) async throws -> Bool
 
     func fetchAuthDevices(session: Session) async throws -> [AuthDevice]
     func removeAuthDevice(id: String, session: Session) async throws -> Bool
@@ -190,8 +189,8 @@ public extension DeveloperPortalAPI {
         try await fetchDevices(for: team, types: .all, session: session)
     }
 
-    func fetchProvisioningProfiles(for team: Team, session: Session) async throws -> [ListedProvisioningProfile] {
-        try await fetchProvisioningProfiles(includeTeamProfiles: true, for: team, session: session)
+    func listProvisioningProfiles(for team: Team, session: Session) async throws -> [ListedProvisioningProfile] {
+        try await listProvisioningProfiles(includeTeamProfiles: true, for: team, session: session)
     }
 
     func createProvisioningProfile(name: String, appID: AppID, certificateIDs: [String], deviceIDs: [String], team: Team, session: Session) async throws -> ProvisioningProfile {
@@ -202,16 +201,12 @@ public extension DeveloperPortalAPI {
         try await updateProvisioningProfile(profileID: profileID, name: name, appIDId: appIDId, certificateIDs: certificateIDs, deviceIDs: deviceIDs, subPlatform: nil, team: team, session: session)
     }
 
-    func downloadProvisioningProfile(for appID: AppID, team: Team, session: Session) async throws -> ProvisioningProfile {
-        try await downloadProvisioningProfile(for: appID, deviceType: .iPhone, team: team, session: session)
+    func downloadProvisioningProfile(for appID: AppID, isTeamProfile: Bool = true, team: Team, session: Session) async throws -> ProvisioningProfile {
+        try await downloadProvisioningProfile(for: appID, isTeamProfile: isTeamProfile, deviceType: .iPhone, team: team, session: session)
     }
 
-    func fetchProvisioningProfile(for appID: AppID, deviceType: DeviceType, team: Team, session: Session) async throws -> ProvisioningProfile {
-        try await downloadProvisioningProfile(for: appID, deviceType: deviceType, team: team, session: session)
-    }
-
-    func fetchProvisioningProfile(for appID: AppID, team: Team, session: Session) async throws -> ProvisioningProfile {
-        try await downloadProvisioningProfile(for: appID, deviceType: .iPhone, team: team, session: session)
+    func downloadProvisioningProfile(for appID: AppID, deviceType: DeviceType, team: Team, session: Session) async throws -> ProvisioningProfile {
+        try await downloadProvisioningProfile(for: appID, isTeamProfile: true, deviceType: deviceType, team: team, session: session)
     }
 }
 

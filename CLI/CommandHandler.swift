@@ -1250,13 +1250,9 @@ public enum CommandHandler {
                 switch type {
                 case .xcode:
                     print("Creating/downloading Xcode-managed Team Profile for \(targetAppID.bundleIdentifier)...")
-                    profile = try await portal.downloadProvisioningProfile(for: targetAppID, deviceType: .iPhone, team: team, session: session)
+                    profile = try await portal.downloadProvisioningProfile(for: targetAppID, isTeamProfile: true, deviceType: .iPhone, team: team, session: session)
 
                 case .manual:
-                    guard team.isPaid else {
-                        throw CLIError.executionFailed("Manual provisioning profiles require a paid Apple Developer account (Individual or Organization). Free accounts only support Xcode-managed profiles.")
-                    }
-
                     let resolvedCertIDs: [String]
                     if let cIDs = certIDs, !cIDs.isEmpty {
                         resolvedCertIDs = cIDs
@@ -1306,7 +1302,7 @@ public enum CommandHandler {
                 }
 
             case .edit(let profID, let name, let customAppID, let certIDs, let deviceIDs, let outputPath):
-                let profiles = try await portal.fetchProvisioningProfiles(includeTeamProfiles: true, for: team, session: session)
+                let profiles = try await portal.listProvisioningProfiles(includeTeamProfiles: true, for: team, session: session)
                 guard let target = profiles.first(where: { $0.identifier == profID || $0.uuid.uuidString == profID }) else {
                     throw CLIError.executionFailed("Provisioning Profile '\(profID)' not found.")
                 }
@@ -1380,7 +1376,7 @@ public enum CommandHandler {
                     throw CLIError.executionFailed("App ID '\(bundleID)' not found.")
                 }
                 print("Downloading Provisioning Profile for \(targetAppID.bundleIdentifier)...")
-                let profile = try await portal.downloadProvisioningProfile(for: targetAppID, deviceType: .iPhone, team: team, session: session)
+                let profile = try await portal.downloadProvisioningProfile(for: targetAppID, isTeamProfile: true, deviceType: .iPhone, team: team, session: session)
                 if let out = outputPath {
                     let outURL = URL(fileURLWithPath: out)
                     try profile.data.write(to: outURL)
@@ -1390,16 +1386,22 @@ public enum CommandHandler {
                 }
 
             case .delete(let profID):
-                let profiles = try await portal.fetchProvisioningProfiles(for: team, session: session)
-                if let target = profiles.first(where: { $0.identifier == profID || $0.uuid.uuidString == profID }) {
-                    _ = try await portal.deleteProvisioningProfile(target, team: team, session: session)
-                    print("Successfully deleted Provisioning Profile: \(target.name)")
+                if profID.count == 10 && profID.rangeOfCharacter(from: CharacterSet.alphanumerics.inverted) == nil {
+                    _ = try await portal.deleteProvisioningProfile(profileID: profID, team: team, session: session)
+                    print("Successfully deleted Provisioning Profile: \(profID)")
                 } else {
-                    throw CLIError.executionFailed("Provisioning Profile '\(profID)' not found.")
+                    let profiles = try await portal.listProvisioningProfiles(includeTeamProfiles: true, for: team, session: session)
+                    if let target = profiles.first(where: { $0.identifier == profID || $0.uuid.uuidString == profID }),
+                       let targetID = target.identifier {
+                        _ = try await portal.deleteProvisioningProfile(profileID: targetID, team: team, session: session)
+                        print("Successfully deleted Provisioning Profile: \(target.name) (\(targetID))")
+                    } else {
+                        throw CLIError.executionFailed("Provisioning Profile '\(profID)' not found.")
+                    }
                 }
 
             case .list:
-                let profiles = try await portal.fetchProvisioningProfiles(includeTeamProfiles: true, for: team, session: session)
+                let profiles = try await portal.listProvisioningProfiles(includeTeamProfiles: true, for: team, session: session)
                 if !SideSignLogging.isLoggingEnabled {
                     print("\nProvisioning Profiles for team '\(team.name)':")
                     for p in profiles {

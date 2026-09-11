@@ -10,8 +10,8 @@ import Foundation
 
 public extension DeveloperPortal {
 
-    func fetchProvisioningProfiles(includeTeamProfiles: Bool = true, for team: Team, session: Session) async throws -> [ListedProvisioningProfile] {
-        debugLog("[SideSign] fetchProvisioningProfiles starting (includeTeamProfiles=\(includeTeamProfiles))...")
+    func listProvisioningProfiles(includeTeamProfiles: Bool = true, for team: Team, session: Session) async throws -> [ListedProvisioningProfile] {
+        debugLog("[SideSign] listProvisioningProfiles starting (includeTeamProfiles=\(includeTeamProfiles))...")
         verboseLog("[SideSign] Team: \(team.name)")
 
         var parameters: [String: any Sendable] = [:]
@@ -28,12 +28,12 @@ public extension DeveloperPortal {
             )
 
             guard let profiles = response.provisioningProfiles else {
-                debugLog("[SideSign] fetchProvisioningProfiles completed with 0 profiles (provisioningProfiles was nil)")
+                debugLog("[SideSign] listProvisioningProfiles completed with 0 profiles (provisioningProfiles was nil)")
                 verboseLog("[SideSign] Profiles: []")
                 return []
             }
 
-            debugLog("[SideSign] fetchProvisioningProfiles completed with \(profiles.count) profile(s)")
+            debugLog("[SideSign] listProvisioningProfiles completed with \(profiles.count) profile(s)")
             if !profiles.isEmpty {
                 let list = profiles.enumerated().map { "  \($0.offset + 1). \($0.element.name) (\($0.element.bundleIdentifier ?? "none"))\($0.element.isTeamProfile == true ? " [Team Profile]" : "")" }.joined(separator: "\n")
                 verboseLog("[SideSign] Profiles (\(profiles.count)):\n\(list)")
@@ -42,7 +42,7 @@ public extension DeveloperPortal {
             }
             return profiles
         } catch {
-            debugLog("[SideSign] fetchProvisioningProfiles failed: \(error)")
+            debugLog("[SideSign] listProvisioningProfiles failed: \(error)")
             throw error
         }
     }
@@ -169,11 +169,23 @@ public extension DeveloperPortal {
     }
 
     func downloadProvisioningProfile(for appID: AppID,
+                                     isTeamProfile: Bool = true,
                                      deviceType: DeviceType = .iPhone,
                                      team: Team,
                                      session: Session) async throws -> ProvisioningProfile
     {
-        debugLog("[SideSign] downloadProvisioningProfile starting...")
+        if !isTeamProfile {
+            debugLog("[SideSign] downloadProvisioningProfile: manual profile requested for App ID '\(appID.bundleIdentifier)'")
+            let profiles = try await listProvisioningProfiles(includeTeamProfiles: false, for: team, session: session)
+            guard let matched = profiles.first(where: { $0.bundleIdentifier == appID.bundleIdentifier || $0.appId?.appIdId == appID.identifier }),
+                  let profileID = matched.identifier else {
+                debugLog("[SideSign] downloadProvisioningProfile error: No manual provisioning profile found on portal for App ID '\(appID.bundleIdentifier)'")
+                throw DeveloperPortalError.invalidProvisioningProfileIdentifier(appID.bundleIdentifier)
+            }
+            return try await downloadProvisioningProfile(profileID: profileID, team: team, session: session)
+        }
+
+        debugLog("[SideSign] downloadProvisioningProfile starting (Xcode Team profile)...")
         verboseLog("[SideSign] AppID: \(appID.bundleIdentifier), Team: \(team.name)")
 
         var parameters = ["appIdId": appID.identifier]
@@ -209,34 +221,7 @@ public extension DeveloperPortal {
         }
     }
 
-    func deleteProvisioningProfile(_ profile: ListedProvisioningProfile, team: Team, session: Session) async throws -> Bool {
-        guard let profileID = profile.identifier else {
-            debugLog("[SideSign] deleteProvisioningProfile error: Profile identifier is missing")
-            throw DeveloperPortalError.invalidProvisioningProfileIdentifier(profile.name)
-        }
-
-        debugLog("[SideSign] deleteProvisioningProfile starting...")
-        verboseLog("[SideSign] ProfileID: \(profileID), Team: \(team.name)")
-
-        let parameters = ["provisioningProfileId": profileID]
-
-        do {
-            let _: EmptyResponse = try await sendRequest(url: Constants.URLs.deleteProvisioningProfile, additionalParameters: parameters, session: session, team: team)
-            debugLog("[SideSign] deleteProvisioningProfile succeeded")
-            verboseLog("[SideSign] Deleted: \(profileID)")
-            return true
-        } catch {
-            debugLog("[SideSign] deleteProvisioningProfile failed: \(error)")
-            throw error
-        }
-    }
-
-    func deleteProvisioningProfile(_ profile: ProvisioningProfile, team: Team, session: Session) async throws -> Bool {
-        guard let profileID = profile.identifier else {
-            debugLog("[SideSign] deleteProvisioningProfile error: Profile identifier is missing")
-            throw DeveloperPortalError.invalidProvisioningProfileIdentifier(profile.name)
-        }
-
+    func deleteProvisioningProfile(profileID: String, team: Team, session: Session) async throws -> Bool {
         debugLog("[SideSign] deleteProvisioningProfile starting...")
         verboseLog("[SideSign] ProfileID: \(profileID), Team: \(team.name)")
 
