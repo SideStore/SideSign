@@ -426,6 +426,7 @@ public enum PortalCommandsParser {
             var certIDsStr: String?
             var deviceIDsStr: String?
             var outputPath: String?
+            var style: ProfileManagementStyle = .manual
 
             while idx < subArgs.count {
                 switch subArgs[idx] {
@@ -435,26 +436,29 @@ public enum PortalCommandsParser {
                 case flags["certIDs"]:      certIDsStr      = nextVal()
                 case flags["deviceIDs"]:    deviceIDsStr    = nextVal()
                 case flags["output"]:       outputPath      = nextVal()
+                case "--xcode":             style           = .xcodeManaged
+                case "--manual":            style           = .manual
+                case "--style", "--method":
+                    if let val = nextVal(), let s = ProfileManagementStyle(argument: val) {
+                        style = s
+                    }
                 default:                break
                 }
                 idx += 1
             }
 
             guard let bundleID = bundleIDStr else {
-                throw CLIError.missingRequiredArgument("Usage: sidesign dev profiles create --bundle-id <bundle_id> [--type <xcode|manual>] [--name <name>] [--cert-ids <id1,id2>] [--device-ids <id1,id2>] [--output <path>]")
+                throw CLIError.missingRequiredArgument("Usage: sidesign dev profiles create --bundle-id <bundle_id> --type <ios|tvos|macos|visionos> [--name <name>] [--cert-ids <id1,id2>] [--device-ids <id1,id2>] [--output <path>] [--xcode|--manual]")
             }
 
-            let creationType: ProfileCreationType
-            if let t = typeStr, t.lowercased() == "manual" {
-                creationType = .manual
-            } else {
-                creationType = .xcode
+            guard let rawType = typeStr, let profileType = ProfileType(argument: rawType) else {
+                throw CLIError.missingRequiredArgument("Profile type is required (--type <ios|tvos|macos|visionos>). Supported types: ios, tvos, macos, visionos")
             }
 
             let certIDs = certIDsStr?.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces)) }
             let deviceIDs = deviceIDsStr?.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces)) }
 
-            subAction = .create(bundleID: bundleID, type: creationType, name: nameStr, certIDs: certIDs, deviceIDs: deviceIDs, outputPath: outputPath)
+            subAction = .create(bundleID: bundleID, type: profileType, style: style, name: nameStr, certIDs: certIDs, deviceIDs: deviceIDs, outputPath: outputPath)
         } else if subArgs.contains("download") || subArgs.contains("fetch") {
             var bundleIDStr: String?
             var outputPath: String?

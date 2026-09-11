@@ -1240,17 +1240,21 @@ public enum CommandHandler {
             guard let team = teams.first else { return }
 
             switch options.action {
-            case .create(let bundleID, let type, let name, let certIDs, let deviceIDs, let outputPath):
+            case .create(let bundleID, let profileType, let style, let name, let certIDs, let deviceIDs, let outputPath):
+                if !team.isPaid && profileType.isPaidOnly {
+                    throw CLIError.executionFailed("\(profileType.displayName) profiles require a paid Apple Developer Program account. Free accounts only support Development profiles: \(ProfileType.freeAccountCases.map(\.rawValue).joined(separator: ", ")).")
+                }
+
                 let appIDs = try await portal.fetchAppIDs(for: team, session: session)
                 guard let targetAppID = appIDs.first(where: { $0.bundleIdentifier == bundleID || $0.identifier == bundleID }) else {
                     throw CLIError.executionFailed("App ID '\(bundleID)' not found.")
                 }
 
                 let profile: ProvisioningProfile
-                switch type {
-                case .xcode:
-                    print("Creating/downloading Xcode-managed Team Profile for \(targetAppID.bundleIdentifier)...")
-                    profile = try await portal.downloadProvisioningProfile(for: targetAppID, isTeamProfile: true, deviceType: .iPhone, team: team, session: session)
+                switch style {
+                case .xcodeManaged:
+                    print("Creating/downloading Xcode-managed Team Profile (\(profileType.displayName)) for \(targetAppID.bundleIdentifier)...")
+                    profile = try await portal.downloadProvisioningProfile(for: targetAppID, isTeamProfile: true, deviceType: profileType.primaryDeviceType, team: team, session: session)
 
                 case .manual:
                     let resolvedCertIDs: [String]
@@ -1268,10 +1272,10 @@ public enum CommandHandler {
                     if let dIDs = deviceIDs, !dIDs.isEmpty {
                         resolvedDeviceIDs = dIDs
                     } else {
-                        let devices = try await portal.fetchDevices(for: team, session: session)
+                        let devices = try await portal.fetchDevices(for: team, types: profileType.acceptedDeviceTypes, session: session)
                         resolvedDeviceIDs = devices.compactMap { $0.deviceID }
                         guard !resolvedDeviceIDs.isEmpty else {
-                            throw CLIError.executionFailed("No registered devices found on team '\(team.name)' to include in manual profile.")
+                            throw CLIError.executionFailed("No registered \(profileType.displayName) devices found on team '\(team.name)' to include in manual profile.")
                         }
                     }
 
@@ -1282,12 +1286,13 @@ public enum CommandHandler {
                         profileName = "\(targetAppID.name) Development"
                     }
 
-                    print("Creating manual provisioning profile '\(profileName)' for \(targetAppID.bundleIdentifier)...")
+                    print("Creating \(profileType.displayName) '\(profileName)' for \(targetAppID.bundleIdentifier)...")
                     profile = try await portal.createProvisioningProfile(
                         name: profileName,
                         appID: targetAppID,
                         certificateIDs: resolvedCertIDs,
                         deviceIDs: resolvedDeviceIDs,
+                        subPlatform: profileType.subPlatformParameter,
                         team: team,
                         session: session
                     )
