@@ -135,6 +135,24 @@ if let info = CertificateParser.parseCertificate(certDER) {
 
 ---
 
+## Authors
+
+- [@mahee96](https://github.com/mahee96)
+
+---
+
+## Credits and References
+
+- Baseline from [AltSign](https://github.com/rileytestut/AltSign) by [@rileytestut](https://github.com/rileytestut)
+- GSA endpoint further research in [PyDunk](https://github.com/nythepegasus/PyDunk) by [@nythepegasus](https://github.com/nythepegasus)
+- SRP research and Swift implementation in [GSACryptoKit](https://github.com/mahee96/GSACryptoKit) by [@mahee96](https://github.com/mahee96)
+- Codesign research and Swift implementation in [CodeSignKit](https://github.com/mahee96/CodeSignKit) by [@mahee96](https://github.com/mahee96)
+- On-device Anisette research and ELF64 emulation implementation in [AnisetteKit](https://github.com/mahee96/AnisetteKit) backed by [Unicorn Engine](https://github.com/unicorn-engine/unicorn) by [@mahee96](https://github.com/mahee96)
+- Provisioning profiles endpoint further research by [@mahee96](https://github.com/mahee96)
+- SideSign CLI cross-platform implementation in Swift by [@mahee96](https://github.com/mahee96)
+
+---
+
 ## License
 
 This project is licensed under the terms of the **GNU General Public License v3.0** (GPL-3.0).
