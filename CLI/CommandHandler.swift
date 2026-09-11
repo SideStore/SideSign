@@ -1105,9 +1105,11 @@ public enum CommandHandler {
             }
 
             switch options.action {
-            case .create(_, let outPath):
-                print("Creating new Development Certificate from Apple...")
-                let keyStore = try await portal.addCertificate(machineName: "Mac", to: team, session: session)
+            case .create(let name, let certType, _, let outPath):
+                let resolvedType = certType ?? .development
+                let machineName = name ?? Host.current().localizedName ?? "Mac"
+                print("Creating new \(resolvedType.displayName) from Apple (Machine: '\(machineName)')...")
+                let keyStore = try await portal.addCertificate(machineName: machineName, type: resolvedType, to: team, session: session)
                 if let out = outPath {
                     let outURL = URL(fileURLWithPath: out)
                     if outURL.pathExtension.lowercased() == "p12" {

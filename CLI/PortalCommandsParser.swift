@@ -73,6 +73,8 @@ public enum PortalCommandsParser {
     ]
 
     private static let certFlags: [String: [String]] = [
+        "name":             ["--name", "-n"],
+        "type":             ["--type", "-t"],
         "csr":              ["--csr", "-c"],
         "output":           ["--output", "-o"],
         "id":               ["--id", "-i"]
@@ -258,17 +260,27 @@ public enum PortalCommandsParser {
         }
 
         if subArgs.contains("create") || subArgs.contains("add") {
+            var name: String?
+            var certType: CertificateType?
             var csrPath: String?
             var outPath: String?
             while idx < subArgs.count {
                 switch subArgs[idx] {
+                case flags["name"]:     name = nextVal()
+                case flags["type"]:
+                    if let typeStr = nextVal() {
+                        guard let parsed = CertificateType(argument: typeStr) else {
+                            throw CLIError.invalidArgument("Invalid certificate type: '\(typeStr)'. Valid types: \(CertificateType.allCases.map(\.rawValue).joined(separator: ", "))")
+                        }
+                        certType = parsed
+                    }
                 case flags["csr"]:      csrPath = nextVal()
                 case flags["output"]:   outPath = nextVal()
                 default:                break
                 }
                 idx += 1
             }
-            subAction = .create(csrPath: csrPath, outPath: outPath)
+            subAction = .create(name: name, type: certType, csrPath: csrPath, outPath: outPath)
         } else if subArgs.contains("revoke") || subArgs.contains("rm") || subArgs.contains("delete") {
             var certID: String?
             while idx < subArgs.count {

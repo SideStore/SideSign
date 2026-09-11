@@ -294,7 +294,7 @@ public struct PortalDeviceOptions: Sendable {
 public struct PortalCertOptions: Sendable {
     public enum Action: Sendable {
         case list
-        case create(csrPath: String?, outPath: String?)
+        case create(name: String?, type: CertificateType?, csrPath: String?, outPath: String?)
         case revoke(certID: String)
     }
 
