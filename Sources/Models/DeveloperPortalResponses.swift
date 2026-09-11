@@ -196,6 +196,10 @@ public struct ListedProvisioningProfile: Decodable, Sendable, Identifiable, Equa
 
     public var identifier: String? { provisioningProfileId }
     public var bundleIdentifier: String? { appId?.identifier }
+    public var profileType: ProfileType? {
+        guard let type else { return nil }
+        return ProfileType(argument: type) ?? ProfileType(rawValue: type)
+    }
 
     enum CodingKeys: String, CodingKey {
         case provisioningProfileId

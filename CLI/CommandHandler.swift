@@ -1254,7 +1254,7 @@ public enum CommandHandler {
                 switch style {
                 case .xcodeManaged:
                     print("Creating/downloading Xcode-managed Team Profile (\(profileType.displayName)) for \(targetAppID.bundleIdentifier)...")
-                    profile = try await portal.downloadProvisioningProfile(for: targetAppID, isTeamProfile: true, deviceType: profileType.primaryDeviceType, team: team, session: session)
+                    profile = try await portal.downloadProvisioningProfile(for: targetAppID, isTeamProfile: true, type: profileType, team: team, session: session)
 
                 case .manual:
                     let resolvedCertIDs: [String]
@@ -1264,13 +1264,15 @@ public enum CommandHandler {
                         let certs = try await portal.fetchCertificates(for: team, session: session)
                         resolvedCertIDs = certs.compactMap { $0.identifier }
                         guard !resolvedCertIDs.isEmpty else {
-                            throw CLIError.executionFailed("No development certificates found on team '\(team.name)' to include in manual profile.")
+                            throw CLIError.executionFailed("No certificates found on team '\(team.name)' to include in manual profile.")
                         }
                     }
 
                     let resolvedDeviceIDs: [String]
                     if let dIDs = deviceIDs, !dIDs.isEmpty {
                         resolvedDeviceIDs = dIDs
+                    } else if profileType.acceptedDeviceTypes == .none {
+                        resolvedDeviceIDs = []
                     } else {
                         let devices = try await portal.fetchDevices(for: team, types: profileType.acceptedDeviceTypes, session: session)
                         resolvedDeviceIDs = devices.compactMap { $0.deviceID }
@@ -1283,7 +1285,7 @@ public enum CommandHandler {
                     if let n = name, !n.isEmpty {
                         profileName = n
                     } else {
-                        profileName = "\(targetAppID.name) Development"
+                        profileName = "\(targetAppID.name) \(profileType.displayName)"
                     }
 
                     print("Creating \(profileType.displayName) '\(profileName)' for \(targetAppID.bundleIdentifier)...")
@@ -1292,7 +1294,7 @@ public enum CommandHandler {
                         appID: targetAppID,
                         certificateIDs: resolvedCertIDs,
                         deviceIDs: resolvedDeviceIDs,
-                        subPlatform: profileType.subPlatformParameter,
+                        type: profileType,
                         team: team,
                         session: session
                     )
@@ -1306,7 +1308,7 @@ public enum CommandHandler {
                     print("Successfully created profile: \(profile.name) (UUID: \(profile.uuid))")
                 }
 
-            case .edit(let profID, let name, let customAppID, let certIDs, let deviceIDs, let outputPath):
+            case .edit(let profID, let name, let customAppID, let profileType, let certIDs, let deviceIDs, let outputPath):
                 let profiles = try await portal.listProvisioningProfiles(includeTeamProfiles: true, for: team, session: session)
                 guard let target = profiles.first(where: { $0.identifier == profID || $0.uuid.uuidString == profID }) else {
                     throw CLIError.executionFailed("Provisioning Profile '\(profID)' not found.")
@@ -1346,15 +1348,25 @@ public enum CommandHandler {
                 let finalDeviceIDs: [String]
                 if let dIDs = deviceIDs, !dIDs.isEmpty {
                     finalDeviceIDs = dIDs
+                } else if let profileType = profileType, profileType.acceptedDeviceTypes == .none {
+                    finalDeviceIDs = []
                 } else if let existingDeviceIDs = target.deviceIds, !existingDeviceIDs.isEmpty {
                     finalDeviceIDs = existingDeviceIDs
                 } else {
-                    let devices = try await portal.fetchDevices(for: team, session: session)
-                    finalDeviceIDs = devices.compactMap { $0.deviceID }
-                    guard !finalDeviceIDs.isEmpty else {
-                        throw CLIError.executionFailed("No devices found on team to associate with profile.")
+                    let deviceTypes = profileType?.acceptedDeviceTypes ?? .all
+                    if deviceTypes == .none {
+                        finalDeviceIDs = []
+                    } else {
+                        let devices = try await portal.fetchDevices(for: team, types: deviceTypes, session: session)
+                        finalDeviceIDs = devices.compactMap { $0.deviceID }
+                        guard !finalDeviceIDs.isEmpty else {
+                            throw CLIError.executionFailed("No devices found on team to associate with profile.")
+                        }
                     }
                 }
+
+                let subPlatform = profileType?.subPlatformParameter
+                let distributionType = profileType?.distributionTypeParameter ?? "limited"
 
                 print("Updating Provisioning Profile '\(finalName)' (ID: \(profileID))...")
                 let updated = try await portal.updateProvisioningProfile(
@@ -1363,6 +1375,8 @@ public enum CommandHandler {
                     appIDId: finalAppIDId,
                     certificateIDs: finalCertIDs,
                     deviceIDs: finalDeviceIDs,
+                    subPlatform: subPlatform,
+                    distributionType: distributionType,
                     team: team,
                     session: session
                 )
@@ -1375,13 +1389,20 @@ public enum CommandHandler {
                     print("Successfully updated profile: \(updated.name) (UUID: \(updated.uuid))")
                 }
 
-            case .download(let bundleID, let outputPath):
+            case .download(let bundleID, let profileType, let isTeamProfile, let outputPath):
                 let appIDs = try await portal.fetchAppIDs(for: team, session: session)
                 guard let targetAppID = appIDs.first(where: { $0.bundleIdentifier == bundleID || $0.identifier == bundleID }) else {
                     throw CLIError.executionFailed("App ID '\(bundleID)' not found.")
                 }
-                print("Downloading Provisioning Profile for \(targetAppID.bundleIdentifier)...")
-                let profile = try await portal.downloadProvisioningProfile(for: targetAppID, isTeamProfile: true, deviceType: .iPhone, team: team, session: session)
+                let targetType = profileType ?? .iOS
+                print("Downloading \(isTeamProfile ? "Xcode-managed Team" : "Manual") Provisioning Profile (\(targetType.displayName)) for \(targetAppID.bundleIdentifier)...")
+                let profile = try await portal.downloadProvisioningProfile(
+                    for: targetAppID,
+                    isTeamProfile: isTeamProfile,
+                    type: targetType,
+                    team: team,
+                    session: session
+                )
                 if let out = outputPath {
                     let outURL = URL(fileURLWithPath: out)
                     try profile.data.write(to: outURL)

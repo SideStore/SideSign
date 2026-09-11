@@ -52,6 +52,7 @@ public extension DeveloperPortal {
                                   certificateIDs: [String],
                                   deviceIDs: [String],
                                   subPlatform: String? = nil,
+                                  distributionType: String = "limited",
                                   team: Team,
                                   session: Session) async throws -> ProvisioningProfile
     {
@@ -61,10 +62,14 @@ public extension DeveloperPortal {
         var parameters: [String: any Sendable] = [
             "provisioningProfileName": name,
             "appIdId": appID.identifier,
-            "distributionType": "limited",
-            "certificateIds": certificateIDs,
-            "deviceIds": deviceIDs
+            "distributionType": distributionType,
+            "certificateIds": certificateIDs
         ]
+        if !deviceIDs.isEmpty && distributionType != "store" && distributionType != "developer-id" {
+            parameters["deviceIds"] = deviceIDs
+        } else if distributionType == "limited" {
+            parameters["deviceIds"] = deviceIDs
+        }
         if let subPlatform = subPlatform {
             parameters["subPlatform"] = subPlatform
         }
@@ -97,6 +102,7 @@ public extension DeveloperPortal {
                                   certificateIDs: [String],
                                   deviceIDs: [String],
                                   subPlatform: String? = nil,
+                                  distributionType: String = "limited",
                                   team: Team,
                                   session: Session) async throws -> ProvisioningProfile
     {
@@ -107,10 +113,14 @@ public extension DeveloperPortal {
             "provisioningProfileId": profileID,
             "provisioningProfileName": name,
             "appIdId": appIDId,
-            "distributionType": "limited",
-            "certificateIds": certificateIDs,
-            "deviceIds": deviceIDs
+            "distributionType": distributionType,
+            "certificateIds": certificateIDs
         ]
+        if !deviceIDs.isEmpty && distributionType != "store" && distributionType != "developer-id" {
+            parameters["deviceIds"] = deviceIDs
+        } else if distributionType == "limited" {
+            parameters["deviceIds"] = deviceIDs
+        }
         if let subPlatform = subPlatform {
             parameters["subPlatform"] = subPlatform
         }
@@ -170,6 +180,7 @@ public extension DeveloperPortal {
 
     func downloadProvisioningProfile(for appID: AppID,
                                      isTeamProfile: Bool = true,
+                                     subPlatform: String? = nil,
                                      deviceType: DeviceType = .iPhone,
                                      team: Team,
                                      session: Session) async throws -> ProvisioningProfile
@@ -189,8 +200,14 @@ public extension DeveloperPortal {
         verboseLog("[SideSign] AppID: \(appID.bundleIdentifier), Team: \(team.name)")
 
         var parameters = ["appIdId": appID.identifier]
-        if deviceType.contains(.appleTV) {
+        if let subPlatform = subPlatform {
+            parameters["subPlatform"] = subPlatform
+        } else if deviceType.contains(.appleTV) {
             parameters["subPlatform"] = "tvOS"
+        } else if deviceType.contains(.mac) {
+            parameters["subPlatform"] = "macOS"
+        } else if deviceType.contains(.visionPro) {
+            parameters["subPlatform"] = "visionOS"
         }
 
         do {
@@ -219,6 +236,22 @@ public extension DeveloperPortal {
             debugLog("[SideSign] downloadProvisioningProfile failed: \(error)")
             throw error
         }
+    }
+
+    func downloadProvisioningProfile(for appID: AppID,
+                                     isTeamProfile: Bool = true,
+                                     type: ProfileType,
+                                     team: Team,
+                                     session: Session) async throws -> ProvisioningProfile
+    {
+        try await downloadProvisioningProfile(
+            for: appID,
+            isTeamProfile: isTeamProfile,
+            subPlatform: type.subPlatformParameter,
+            deviceType: type.primaryDeviceType,
+            team: team,
+            session: session
+        )
     }
 
     func deleteProvisioningProfile(profileID: String, team: Team, session: Session) async throws -> Bool {

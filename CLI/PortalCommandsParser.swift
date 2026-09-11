@@ -448,11 +448,13 @@ public enum PortalCommandsParser {
             }
 
             guard let bundleID = bundleIDStr else {
-                throw CLIError.missingRequiredArgument("Usage: sidesign dev profiles create --bundle-id <bundle_id> --type <ios|tvos|macos|visionos> [--name <name>] [--cert-ids <id1,id2>] [--device-ids <id1,id2>] [--output <path>] [--xcode|--manual]")
+                let supported = ProfileType.allCases.map(\.rawValue).joined(separator: "|")
+                throw CLIError.missingRequiredArgument("Usage: sidesign dev profiles create --bundle-id <bundle_id> --type <\(supported)> [--name <name>] [--cert-ids <id1,id2>] [--device-ids <id1,id2>] [--output <path>] [--xcode|--manual]")
             }
 
             guard let rawType = typeStr, let profileType = ProfileType(argument: rawType) else {
-                throw CLIError.missingRequiredArgument("Profile type is required (--type <ios|tvos|macos|visionos>). Supported types: ios, tvos, macos, visionos")
+                let supported = ProfileType.allCases.map(\.rawValue).joined(separator: ", ")
+                throw CLIError.missingRequiredArgument("Profile type is required (--type <type>). Supported types: \(supported)")
             }
 
             let certIDs = certIDsStr?.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces)) }
@@ -461,23 +463,30 @@ public enum PortalCommandsParser {
             subAction = .create(bundleID: bundleID, type: profileType, style: style, name: nameStr, certIDs: certIDs, deviceIDs: deviceIDs, outputPath: outputPath)
         } else if subArgs.contains("download") || subArgs.contains("fetch") {
             var bundleIDStr: String?
+            var typeStr: String?
+            var isTeamProfile = true
             var outputPath: String?
             while idx < subArgs.count {
                 switch subArgs[idx] {
-                case flags["bundleID"]: bundleIDStr = nextVal()
-                case flags["output"]:   outputPath  = nextVal()
+                case flags["bundleID"]: bundleIDStr   = nextVal()
+                case flags["type"]:     typeStr       = nextVal()
+                case flags["output"]:   outputPath    = nextVal()
+                case "--manual":        isTeamProfile = false
+                case "--xcode":         isTeamProfile = true
                 default:                break
                 }
                 idx += 1
             }
             guard let bundleID = bundleIDStr else {
-                throw CLIError.missingRequiredArgument("Usage: sidesign dev profiles download --bundle-id <bundle_id> [--output <path>]")
+                throw CLIError.missingRequiredArgument("Usage: sidesign dev profiles download --bundle-id <bundle_id> [--type <type>] [--manual|--xcode] [--output <path>]")
             }
-            subAction = .download(bundleID: bundleID, outputPath: outputPath)
+            let profileType = typeStr != nil ? ProfileType(argument: typeStr!) : nil
+            subAction = .download(bundleID: bundleID, type: profileType, isTeamProfile: isTeamProfile, outputPath: outputPath)
         } else if subArgs.contains("edit") || subArgs.contains("update") || subArgs.contains("modify") {
             var profileID: String?
             var nameStr: String?
             var appIDStr: String?
+            var typeStr: String?
             var certIDsStr: String?
             var deviceIDsStr: String?
             var outputPath: String?
@@ -487,6 +496,7 @@ public enum PortalCommandsParser {
                 case flags["id"]:           profileID       = nextVal()
                 case flags["name"]:         nameStr         = nextVal()
                 case flags["appID"]:        appIDStr        = nextVal()
+                case flags["type"]:         typeStr         = nextVal()
                 case flags["certIDs"]:      certIDsStr      = nextVal()
                 case flags["deviceIDs"]:    deviceIDsStr    = nextVal()
                 case flags["output"]:       outputPath      = nextVal()
@@ -496,13 +506,14 @@ public enum PortalCommandsParser {
             }
 
             guard let profID = profileID else {
-                throw CLIError.missingRequiredArgument("Usage: sidesign dev profiles edit --id <profile_id_or_uuid> [--name <name>] [--app-id <app_id>] [--cert-ids <id1,id2>] [--device-ids <id1,id2>] [--output <path>]")
+                throw CLIError.missingRequiredArgument("Usage: sidesign dev profiles edit --id <profile_id_or_uuid> [--name <name>] [--app-id <app_id>] [--type <type>] [--cert-ids <id1,id2>] [--device-ids <id1,id2>] [--output <path>]")
             }
 
+            let profileType = typeStr != nil ? ProfileType(argument: typeStr!) : nil
             let certIDs = certIDsStr?.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces)) }
             let deviceIDs = deviceIDsStr?.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces)) }
 
-            subAction = .edit(profileID: profID, name: nameStr, appID: appIDStr, certIDs: certIDs, deviceIDs: deviceIDs, outputPath: outputPath)
+            subAction = .edit(profileID: profID, name: nameStr, appID: appIDStr, type: profileType, certIDs: certIDs, deviceIDs: deviceIDs, outputPath: outputPath)
         } else if subArgs.contains("delete") || subArgs.contains("rm") || subArgs.contains("remove") {
             var profileID: String?
             while idx < subArgs.count {
