@@ -1345,15 +1345,17 @@ public enum CommandHandler {
                     }
                 }
 
+                let effectiveType = profileType ?? target.profileType
+
                 let finalDeviceIDs: [String]
                 if let dIDs = deviceIDs, !dIDs.isEmpty {
                     finalDeviceIDs = dIDs
-                } else if let profileType = profileType, profileType.acceptedDeviceTypes == .none {
+                } else if let effectiveType = effectiveType, effectiveType.acceptedDeviceTypes == .none {
                     finalDeviceIDs = []
                 } else if let existingDeviceIDs = target.deviceIds, !existingDeviceIDs.isEmpty {
                     finalDeviceIDs = existingDeviceIDs
                 } else {
-                    let deviceTypes = profileType?.acceptedDeviceTypes ?? .all
+                    let deviceTypes = effectiveType?.acceptedDeviceTypes ?? .all
                     if deviceTypes == .none {
                         finalDeviceIDs = []
                     } else {
@@ -1365,8 +1367,8 @@ public enum CommandHandler {
                     }
                 }
 
-                let subPlatform = profileType?.subPlatformParameter
-                let distributionType = profileType?.distributionTypeParameter ?? "limited"
+                let subPlatform = effectiveType?.subPlatformParameter
+                let distributionType = effectiveType?.distributionTypeParameter ?? "limited"
 
                 print("Updating Provisioning Profile '\(finalName)' (ID: \(profileID))...")
                 let updated = try await portal.updateProvisioningProfile(
