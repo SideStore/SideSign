@@ -185,6 +185,7 @@ public extension DeveloperPortal {
                                      team: Team,
                                      session: Session) async throws -> ProvisioningProfile
     {
+        // If team profile then generate on the fly but if not get the persisted one(if available)
         if !isTeamProfile {
             debugLog("[SideSign] downloadProvisioningProfile: manual profile requested for App ID '\(appID.bundleIdentifier)'")
             let profiles = try await listProvisioningProfiles(includeTeamProfiles: false, for: team, session: session)
