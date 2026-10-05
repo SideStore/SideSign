@@ -73,7 +73,15 @@ public extension DeveloperPortal {
             "appIdId": appID.identifier
         ]
 
+        var capabilityIDs: [String] = []
         for (feature, value) in appID.features {
+            if let capabilityID = feature.capabilityID {
+                // Not a legacy feature: enabled below with a v1 request.
+                if value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "true" {
+                    capabilityIDs.append(capabilityID)
+                }
+                continue
+            }
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.lowercased() == "true" {
                 parameters[feature.rawValue] = true
@@ -93,7 +101,55 @@ public extension DeveloperPortal {
 
         debugLog("[SideSign] updateAppID succeeded")
         verboseLog("[SideSign] Updated: \(updatedAppID.name) (\(updatedAppID.bundleIdentifier))")
+
+        if !capabilityIDs.isEmpty {
+            // A failure here leaves the App ID as the legacy request left it,
+            // so the app still installs, without these capabilities.
+            do {
+                try await enableCapabilities(capabilityIDs.sorted(), for: updatedAppID, team: team, session: session)
+            } catch {
+                debugLog("[SideSign] updateAppID: could not enable \(capabilityIDs.sorted()): \(error.localizedDescription); continuing without them")
+            }
+        }
         return updatedAppID
+    }
+
+    /// Enables capabilities that only the developer services v1 API can enable
+    /// (Increased Memory Limit). This is the request Xcode sends, and the one
+    /// AltSign and GetMoreRam send; Apple accepts it for free teams too.
+    func enableCapabilities(_ capabilityIDs: [String], for appID: AppID, team: Team, session: Session) async throws {
+        debugLog("[SideSign] enableCapabilities starting...")
+        verboseLog("[SideSign] AppID: \(appID.bundleIdentifier), capabilities: \(capabilityIDs)")
+
+        let capabilities: [[String: Any]] = capabilityIDs.map { capabilityID in
+            [
+                "type": "bundleIdCapabilities",
+                "attributes": ["enabled": true, "settings": [Any]()],
+                "relationships": ["capability": ["data": ["id": capabilityID, "type": "capabilities"]]]
+            ]
+        }
+        let body: [String: Any] = [
+            "data": [
+                "id": appID.identifier,
+                "type": "bundleIds",
+                "attributes": [
+                    "name": appID.name,
+                    "identifier": appID.bundleIdentifier,
+                    "teamId": team.identifier,
+                    "seedId": team.identifier,
+                    "bundleType": "bundle",
+                    "hasExclusiveManagedCapabilities": false
+                ],
+                "relationships": ["bundleIdCapabilities": ["data": capabilities]]
+            ]
+        ]
+
+        var request = URLRequest(url: URL(string: "bundleIds/\(appID.identifier)", relativeTo: servicesBaseURL)!)
+        request.httpMethod = "PATCH"
+        request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+
+        let _: EmptyResponse = try await sendServicesBodyRequest(request, session: session)
+        debugLog("[SideSign] enableCapabilities succeeded")
     }
 
     func deleteAppID(_ appID: AppID, for team: Team, session: Session) async throws -> Bool {

@@ -75,9 +75,22 @@ public extension Feature {
     static let extendedVirtualAddressing: Feature       = "extendedVirtualAddressing"
     static let increasedDebuggingMemoryLimit: Feature   = "increasedDebuggingMemoryLimit"
 
+    /// The capability ID the developer services v1 `bundleIdCapabilities`
+    /// endpoint uses for a feature the legacy `updateAppId.action` request
+    /// cannot enable, or nil for a legacy feature.
+    var capabilityID: String? {
+        switch self {
+        case .increasedMemoryLimit: return "INCREASED_MEMORY_LIMIT"
+        default:                    return nil
+        }
+    }
+
     static let freeFeatures: Set<Feature> = [
         .appGroups,
-        .interAppAudio
+        .interAppAudio,
+        // Apple offers this capability to free teams; it is enabled through
+        // the v1 bundleIdCapabilities request (see `capabilityID`).
+        .increasedMemoryLimit
     ]
 
     static let paidFeatures: Set<Feature> = [
