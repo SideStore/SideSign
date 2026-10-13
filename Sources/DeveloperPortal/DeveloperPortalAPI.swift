@@ -419,33 +419,7 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
         request.httpBody = bodyData
         request.setValue(methodOverride, forHTTPHeaderField: "X-HTTP-Method-Override")
 
-        let h = customHeaders
-        var headers: [String: String] = [
-            "Content-Type": "application/vnd.api+json",
-            "User-Agent": h.developerServices.userAgent,
-            "Accept": "application/vnd.api+json",
-            "Accept-Language": "en-us",
-            "X-Apple-App-Info": h.grandSlam.authApp,
-            "X-Xcode-Version": apiSession.xcodeVersion,
-            "X-Apple-I-Identity-Id": apiSession.dsid,
-            "X-Apple-GS-Token": apiSession.authToken
-        ]
-
-        if includeAnisette {
-            let a = apiSession.anisetteData
-            headers["X-Apple-I-MD-M"] = a.machineID
-            headers["X-Apple-I-MD"] = a.oneTimePassword
-            headers["X-Apple-I-MD-LU"] = a.localUserID
-            headers["X-Apple-I-MD-RINFO"] = a.routingInfo
-            headers["X-Mme-Device-Id"] = a.deviceID
-            headers["X-MMe-Client-Info"] = a.clientInfo
-            headers["X-Apple-I-Client-Time"] = a.clientTime
-            headers["X-Apple-Locale"] = a.locale
-            headers["X-Apple-I-Locale"] = a.locale
-            headers["X-Apple-I-TimeZone"] = a.timeZone
-        }
-
-        headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        servicesHeaders(for: apiSession, includeAnisette: includeAnisette).forEach { request.setValue($1, forHTTPHeaderField: $0) }
 
         verboseLog("[SideSign] sendServicesRequest to: \(request.url?.absoluteString ?? "unknown URL")")
         verboseLog("[SideSign] sendServicesRequest parameters: \(additionalParameters ?? [:])")
@@ -505,6 +479,78 @@ public final class DeveloperPortal: DeveloperPortalAPI, Sendable {
             }
             let rawStr = String(data: data, encoding: .utf8) ?? data.hexEncodedString()
             debugLog("[SideSign] sendServicesRequest failed to decode \(T.self): \(error). Raw payload: \(rawStr)")
+            throw ServerError.invalidResponseFormat(rawPayload: rawStr)
+        }
+    }
+
+    func servicesHeaders(for apiSession: Session, includeAnisette: Bool) -> [String: String] {
+        let h = customHeaders
+        var headers: [String: String] = [
+            "Content-Type": "application/vnd.api+json",
+            "User-Agent": h.developerServices.userAgent,
+            "Accept": "application/vnd.api+json",
+            "Accept-Language": "en-us",
+            "X-Apple-App-Info": h.grandSlam.authApp,
+            "X-Xcode-Version": apiSession.xcodeVersion,
+            "X-Apple-I-Identity-Id": apiSession.dsid,
+            "X-Apple-GS-Token": apiSession.authToken
+        ]
+
+        if includeAnisette {
+            let a = apiSession.anisetteData
+            headers["X-Apple-I-MD-M"] = a.machineID
+            headers["X-Apple-I-MD"] = a.oneTimePassword
+            headers["X-Apple-I-MD-LU"] = a.localUserID
+            headers["X-Apple-I-MD-RINFO"] = a.routingInfo
+            headers["X-Mme-Device-Id"] = a.deviceID
+            headers["X-MMe-Client-Info"] = a.clientInfo
+            headers["X-Apple-I-Client-Time"] = a.clientTime
+            headers["X-Apple-Locale"] = a.locale
+            headers["X-Apple-I-Locale"] = a.locale
+            headers["X-Apple-I-TimeZone"] = a.timeZone
+        }
+        return headers
+    }
+
+    // JSON:API Request Dispatcher: sends the request's own method and JSON body
+    // (a PATCH, say), where sendServicesRequest tunnels a query through POST.
+    func sendServicesBodyRequest<T: Decodable>(_ originalRequest: URLRequest, session apiSession: Session) async throws -> T {
+        var request = originalRequest
+        servicesHeaders(for: apiSession, includeAnisette: true).forEach { request.setValue($1, forHTTPHeaderField: $0) }
+
+        verboseLog("[SideSign] sendServicesBodyRequest \(request.httpMethod ?? "GET") to: \(request.url?.absoluteString ?? "unknown URL")")
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            debugLog("[SideSign] sendServicesBodyRequest network error: \(error)")
+            throw error
+        }
+
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if let payloadString = formatPayload(data) {
+            verboseLog("[SideSign] sendServicesBodyRequest response (HTTP \(statusCode)): \(payloadString)")
+        }
+
+        if let status = try? JSONDecoder().decode(DeveloperPortalStatusResponse.self, from: data),
+           let firstError = status.errors?.first {
+            let message = firstError.detail ?? firstError.title ?? "Apple Developer Services Error"
+            debugLog("[SideSign] sendServicesBodyRequest error (HTTP \(statusCode)): \(message)")
+            throw ServerError.underlyingError(code: Int(firstError.status ?? "") ?? statusCode, message: message)
+        }
+        guard (200..<300).contains(statusCode) else {
+            throw ServerError.underlyingError(code: statusCode, message: "Apple Developer Services returned HTTP \(statusCode)")
+        }
+
+        if data.isEmpty, let empty = EmptyResponse() as? T {
+            return empty
+        }
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            let rawStr = String(data: data, encoding: .utf8) ?? data.hexEncodedString()
+            debugLog("[SideSign] sendServicesBodyRequest failed to decode \(T.self): \(error). Raw payload: \(rawStr)")
             throw ServerError.invalidResponseFormat(rawPayload: rawStr)
         }
     }
