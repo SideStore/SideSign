@@ -46,6 +46,7 @@ public struct Feature: RawRepresentable, Hashable, Codable, Sendable, Expressibl
         case .pushNotifications:               self = .pushNotifications
         case .gameCenter:                      self = .gameCenter
         case .inAppPurchase:                   self = .inAppPurchase
+        case .healthKit:                       self = .healthKit
         default:
             return nil
         }
@@ -74,10 +75,12 @@ public extension Feature {
     static let increasedMemoryLimit: Feature            = "increasedMemoryLimit"
     static let extendedVirtualAddressing: Feature       = "extendedVirtualAddressing"
     static let increasedDebuggingMemoryLimit: Feature   = "increasedDebuggingMemoryLimit"
+    static let healthKit: Feature                       = "HK421J6T7P"
 
     static let freeFeatures: Set<Feature> = [
         .appGroups,
-        .interAppAudio
+        .interAppAudio,
+        .healthKit
     ]
 
     static let paidFeatures: Set<Feature> = [
@@ -101,6 +104,7 @@ public extension Feature {
         .wirelessAccessoryConfiguration,
         .increasedMemoryLimit,
         .extendedVirtualAddressing,
-        .increasedDebuggingMemoryLimit
+        .increasedDebuggingMemoryLimit,
+        .healthKit
     ]
 }

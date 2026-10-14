@@ -79,7 +79,8 @@ public extension Entitlement {
         .extendedVirtualAddressing,
         .teamIdentifier,
         .keychainAccessGroups,
-        .applicationIdentifier
+        .applicationIdentifier,
+        .healthKit
     ]
 
     static let paidEntitlements: Set<Entitlement> = [
