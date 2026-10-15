@@ -6,6 +6,7 @@
 //  Copyright © 2026 SideSign. All rights reserved.
 //
 
+import Foundation
 import Testing
 @testable import SideSign
 import CodeSignKit
@@ -97,5 +98,27 @@ struct SideSignTests {
         try reader.goToFirstFile()
         let decompressed = try reader.readCurrentFile()
         #expect(decompressed == testContent)
+    }
+
+    @Test
+    func appExtensionsIncludeExtensionKitExtensions() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        func makeBundle(_ url: URL, identifier: String) throws {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            let plist: [String: Any] = ["CFBundleIdentifier": identifier, "CFBundleName": url.deletingPathExtension().lastPathComponent]
+            let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+            try data.write(to: url.appendingPathComponent("Info.plist"))
+        }
+
+        let appURL = tempDir.appendingPathComponent("Test.app")
+        try makeBundle(appURL, identifier: "com.example.test")
+        // Classic app extension (NSExtension) and ExtensionKit extension (EXAppExtensionAttributes).
+        try makeBundle(appURL.appendingPathComponent("PlugIns/Widget.appex"), identifier: "com.example.test.widget")
+        try makeBundle(appURL.appendingPathComponent("Extensions/Upload.appex"), identifier: "com.example.test.upload")
+
+        let app = try #require(AppBundle(fileURL: appURL))
+        #expect(Set(app.appExtensions.map(\.bundleIdentifier)) == ["com.example.test.widget", "com.example.test.upload"])
     }
 }

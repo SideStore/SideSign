@@ -117,13 +117,14 @@ public struct AppBundle: Sendable, Identifiable, Hashable, Equatable {
     }
 
     private func loadExtensions() -> Set<AppBundle> {
-        let pluginsURL = fileURL.appendingPathComponent("PlugIns")
-        guard let contents = try? FileManager.default.contentsOfDirectory(
-            at: pluginsURL,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else {
-            return []
+        // App extensions live in PlugIns/; ExtensionKit extensions (EXAppExtensionAttributes,
+        // e.g. PhotoKit background upload) live in Extensions/.
+        let contents = ["PlugIns", "Extensions"].flatMap { folder in
+            (try? FileManager.default.contentsOfDirectory(
+                at: fileURL.appendingPathComponent(folder),
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )) ?? []
         }
         let extensions = contents
             .filter { $0.pathExtension.lowercased() == "appex" }
