@@ -6,6 +6,7 @@
 //  Copyright © 2026 SideSign. All rights reserved.
 //
 
+import Foundation
 import Testing
 @testable import SideSign
 import CodeSignKit
