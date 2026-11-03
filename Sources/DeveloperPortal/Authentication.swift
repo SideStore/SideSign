@@ -1147,6 +1147,19 @@ public extension DeveloperPortal {
                 lastHttp = retryHttp
                 if lastStatus != 503 && lastStatus != 433 { break }
             }
+            // Last resort: same JSON body as Mac15,7 (SideInstaller MAC_CLIENT_INFO path)
+            if lastStatus == 503 || lastStatus == 433 {
+                debugLog("[SideSign] Phone code still HTTP \(lastStatus) — one attempt as MAC_CLIENT_INFO")
+                var macReq = makeTwoFactorAuthRequest(url: securityCodeURL, context: ctx, asMac: true)
+                macReq.httpMethod = "POST"
+                macReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                macReq.setValue("application/json", forHTTPHeaderField: "Accept")
+                macReq.httpBody = verifyRequest.httpBody
+                let (macData, macHttp) = try await performTwoFactorRequest(macReq, context: ctx, actionName: "validatePhone2FACode-mac")
+                lastData = macData
+                lastStatus = macHttp.safeStatusCode
+                lastHttp = macHttp
+            }
             return try parseTwoFactorAuthVerifyResponse(
                 data: lastData,
                 statusCode: lastStatus,
@@ -1460,7 +1473,7 @@ public extension DeveloperPortal {
             let body = String(data: data, encoding: .utf8) ?? ""
 
             // SideInstaller refuses_client: only bare 403 (no serviceErrors), not 503
-            let hasServiceErrors = body.contains("serviceErrors") || body.contains("ec")
+            let hasServiceErrors = body.contains("serviceErrors") || body.contains("\"ec\"") || body.contains("\"ec\" :")
             let bare403 = status == 403 && !hasServiceErrors
             let shouldRetryAsMac = !triedMac && bare403
             if shouldRetryAsMac {
@@ -1471,6 +1484,13 @@ public extension DeveloperPortal {
                 var macRequest = makeTwoFactorAuthRequest(url: url, context: context, asMac: true)
                 macRequest.httpMethod = current.httpMethod
                 macRequest.httpBody = current.httpBody
+                // Critical: phone securitycode is JSON — do not reset to text/x-xml-plist (→ HTTP 503)
+                if let ct = current.value(forHTTPHeaderField: "Content-Type") {
+                    macRequest.setValue(ct, forHTTPHeaderField: "Content-Type")
+                }
+                if let ac = current.value(forHTTPHeaderField: "Accept") {
+                    macRequest.setValue(ac, forHTTPHeaderField: "Accept")
+                }
                 current = macRequest
                 triedMac = true
                 continue
