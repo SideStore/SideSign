@@ -33,22 +33,18 @@ public extension DeveloperPortal {
         debugLog("[SideSign] Starting authenticate...")
         verboseLog("[SideSign] Authenticating Apple ID: \(sanitizedAppleID)")
 
+        // SideInstaller AnisetteData::get_client_provided_data — only these anisette fields in CPD.
+        // Extra LU/RINFO/SRL/Client-Time in CPD has been correlated with -80045 on mismatched builds.
         let clientDictionary: [String: any Sendable] = [
             "bootstrap": true,
             "icscrec": true,
             "pbe": false,
             "prkgen": true,
-            "svct": customHeaders.grandSlam.service,
-            "loc": anisetteData.locale,
-            "X-Apple-Locale": anisetteData.locale,
+            "svct": customHeaders.grandSlam.service.isEmpty ? "iCloud" : customHeaders.grandSlam.service,
+            "loc": anisetteData.locale.isEmpty ? "en_US" : anisetteData.locale,
+            "X-Mme-Device-Id": anisetteData.deviceID,
             "X-Apple-I-MD": anisetteData.oneTimePassword,
             "X-Apple-I-MD-M": anisetteData.machineID,
-            "X-Mme-Device-Id": anisetteData.deviceID,
-            "X-Apple-I-MD-LU": anisetteData.localUserID,
-            "X-Apple-I-MD-RINFO": anisetteData.routingInfo,
-            "X-Apple-I-SRL-NO": anisetteData.serialNumber,
-            "X-Apple-I-Client-Time": anisetteData.clientTime,
-            "X-Apple-I-TimeZone": anisetteData.timeZone
         ]
 
         guard let srpClient = SRPClient(),
@@ -399,23 +395,18 @@ public extension DeveloperPortal {
         let currentMacUA = userAgent
 
         func applyGrandSlamHeaders(_ req: inout URLRequest, clientInfo: String, userAgent: String) {
+            // SideInstaller GrandSlam base_headers + get_headers (Device-Id, MD, MD-M only)
             let allHeaders: [String: String] = [
                 "Content-Type": "text/x-xml-plist",
                 "Accept": "text/x-xml-plist",
                 "User-Agent": userAgent,
                 "X-Mme-Client-Info": clientInfo,
                 "X-Xcode-Version": "14.2 (14C18)",
-                "X-Apple-App-Info": h.grandSlam.authApp.isEmpty ? "com.apple.gs.xcode.auth" : h.grandSlam.authApp,
-                "X-Apple-I-MD-M": anisetteData.machineID,
+                "X-Apple-App-Info": "com.apple.gs.xcode.auth",
+                "X-Mme-Device-Id": anisetteData.deviceID,
                 "X-Apple-I-MD": anisetteData.oneTimePassword,
-                "X-Apple-I-MD-LU": anisetteData.localUserID,
-                "X-Apple-I-MD-RINFO": anisetteData.routingInfo,
-                "X-Apple-I-SRL-NO": anisetteData.serialNumber,
-                "X-Apple-I-Client-Time": anisetteData.clientTime,
-                "X-Apple-Locale": anisetteData.locale,
-                "X-Apple-I-TimeZone": anisetteData.timeZone,
-                "X-MMe-Device-Id": anisetteData.deviceID,
-                "Connection": "close", // SideInstaller: GSA answers reused connections with 5xx
+                "X-Apple-I-MD-M": anisetteData.machineID,
+                "Connection": "close",
             ]
             allHeaders.forEach { req.setValue($1, forHTTPHeaderField: $0) }
         }
@@ -506,6 +497,12 @@ public extension DeveloperPortal {
             case GrandSlamAuthErrorCodes.incorrectVerificationCode:
                 throw DeveloperPortalError.incorrectVerificationCode(cause: errorDesc)
             default:
+                // -80045 / -80046 = anisette identity rejected — drop saved adi so next attempt can provision clean
+                if errorCode == -80045 || errorCode == -80046 || errorCode == 80045 || errorCode == 80046 {
+                    UserDefaults.standard.removeObject(forKey: "SideSign.anisetteAdiBlob")
+                    UserDefaults.standard.removeObject(forKey: "anisetteAdiBlob")
+                    debugLog("[SideSign] Cleared adi blob after \(errorCode) — reset adi.pb in SideStore and retry once on a Mac server")
+                }
                 throw ServerError.underlyingError(code: errorCode, message: errorDesc ?? "Authentication failed")
             }
         }
