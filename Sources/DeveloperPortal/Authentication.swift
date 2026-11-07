@@ -766,20 +766,39 @@ public extension DeveloperPortal {
         var ctx = context
         var pendingError: String? = nil
 
-        // Always present devices / SMS / phone selection first.
-        // Previously secondaryAuth auto-sent SMS and skipped the method picker;
-        // trustedDevice auto-sent to devices before the UI appeared.
-        // Send a code only after the user chooses (unless Apple already pushed one).
+        // SideStore only shows Apple Devices / SMS / Phone Call for
+        // TwoFactorRequest.selectDeliveryMethod — not for .trustedDevice
+        // (that is code-entry + "Other Options…"). Ask for the method first.
+        let preferredMode: TwoFactorDeliveryMode =
+            (codeAlreadySent || isTrustedDevice) ? .trustedDevice : .sms
+        let initialChoice = try await verificationHandler(
+            .selectDeliveryMethod(preferredMode: preferredMode, phoneNumbers: phoneNumbers)
+        )
+
         var state: SideInstallerLoginState
-        if codeAlreadySent {
-            // Apple already pushed a code — open entry UI (handler still allows switching method)
-            state = .needsDevice2FAVerification
-        } else {
-            // Open picker first; send only after requestTrustedDevice / requestSMS / requestVoice
-            state = .needsDevice2FAVerification
+        switch initialChoice {
+        case .requestTrustedDevice:
+            state = codeAlreadySent ? .needsDevice2FAVerification : .needsDevice2FA
+        case .requestSMS(let id):
+            state = .needsSMS2FA(phoneID: id.isEmpty ? phoneID0 : id)
+        case .requestVoice(let id):
+            // Voice is handled like SMS after the call is requested in the loop
+            let voiceID = id.isEmpty ? phoneID0 : id
+            do {
+                let result = try await sendPhone2FACodeRequest(
+                    mode: "voice", phoneID: voiceID, knownPhoneNumbers: phoneNumbers, context: context)
+                phoneNumbers = result.phoneNumbers.isEmpty ? phoneNumbers : result.phoneNumbers
+                state = .needsSMS2FAVerification(phoneID: result.phoneID)
+            } catch {
+                // Fall back to device flow if voice is refused
+                state = .needsDevice2FA
+            }
+        case .verificationCode(_):
+            // Unexpected at method selection — treat as cancel
+            throw DeveloperPortalError.userCancelled
+        case .cancel:
+            throw DeveloperPortalError.userCancelled
         }
-        _ = isTrustedDevice // Apple's preferred channel is advisory; user chooses
-        _ = phoneID0        // used when the user picks SMS / voice
 
         let phoneMsg = "Apple won't send a code by text or call to this sign-in, so it was sent to your Apple devices."
         let deviceMsg = "Apple didn't confirm sending a code to your Apple devices. If one arrived, enter it; if not, try another way."
