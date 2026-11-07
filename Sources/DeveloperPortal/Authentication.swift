@@ -389,14 +389,14 @@ public extension DeveloperPortal {
         request.httpMethod = "POST"
         request.httpBody = plistData
 
-        // SideInstaller client_info_to_use — one identity; stock/Android/Xcode → safe client.
-        // GSA answers stock Xcode-named clients and bad identities with HTTP 503.
-        let currentMac = "<MacBookPro18,3> <macOS;26.6;25F84> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
-        let currentMacUA = "AuthKit/1 (Macintosh; OS X 26.6) (com.apple.akd/1.0)"
-
-        // SideInstaller 1.6.1: always report CURRENT_MAC through Mac ADI (fixes -80046)
-        let clientInfo = currentMac
-        let userAgent = currentMacUA
+        // SideInstaller client_info_to_use — MUST match the ADI library behind anisetteData.
+        // CURRENT_MAC only for Mac ADI (10.12 servers). Android/stock → Windows.
+        // Forcing CURRENT_MAC on Android OTP is Apple error -80045 at login.
+        let resolved = Self.resolveClientIdentity(from: anisetteData)
+        let clientInfo = resolved.clientInfo
+        let userAgent = resolved.userAgent
+        let currentMac = clientInfo
+        let currentMacUA = userAgent
 
         func applyGrandSlamHeaders(_ req: inout URLRequest, clientInfo: String, userAgent: String) {
             let allHeaders: [String: String] = [
@@ -1402,25 +1402,25 @@ public extension DeveloperPortal {
     }
 
     private static func resolveClientIdentity(from anisetteData: AnisetteData) -> (clientInfo: String, userAgent: String) {
-        // SideInstaller remote_v3::client_info_to_use — exact parity
+        // SideInstaller remote_v3::client_info_to_use — exact
+        let advertised = anisetteData.clientInfo.trimmingCharacters(in: .whitespacesAndNewlines)
+        let windows = "<PC> <Windows;6.2(0,0);9200> <com.apple.AuthKit/1 (com.apple.iTunes/12.12.4.1)>"
         let currentMac = "<MacBookPro18,3> <macOS;26.6;25F84> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
         let currentMacUA = "AuthKit/1 (Macintosh; OS X 26.6) (com.apple.akd/1.0)"
-        let windows = "<PC> <Windows;6.2(0,0);9200> <com.apple.AuthKit/1 (com.apple.iTunes/12.12.4.1)>"
         let akdUA = "akd/1.0 CFNetwork/808.1.4"
-        let advertised = anisetteData.clientInfo.trimmingCharacters(in: .whitespacesAndNewlines)
+
         let stock = advertised.hasPrefix("<MacBookPro13,2> <macOS;13.1;22C65>")
             || advertised.hasPrefix("<MacBookPro15,1> <Mac OS X;10.15.2;19C57>")
-        let android = advertised.contains("<Android;")
-        if advertised.isEmpty || android || stock {
-            // SideInstaller: Android/stock → Windows; we use CURRENT_MAC when SideStore is on Mac ADI
-            // (SideInstaller never logs in through Android ADI anymore)
+        if advertised.isEmpty || stock || advertised.contains("<Android;") {
+            return (windows, akdUA)
+        }
+
+        // macOS version < 10.13 (Mac ADI) → CURRENT_MAC
+        if let ver = macOSVersion(fromClientInfo: advertised), ver.0 < 10 || (ver.0 == 10 && ver.1 < 13) {
             return (currentMac, currentMacUA)
         }
-        // mac_version < 10.13 (Mac ADI servers name 10.12.6)
-        if advertised.contains("10.12") || advertised.contains("Mac OS X;10.11") || advertised.contains("Mac OS X;10.10") {
-            return (currentMac, currentMacUA)
-        }
-        if advertised.contains("MacBook") || advertised.contains("Mac OS") || advertised.contains("macOS") || advertised.contains("<Mac") {
+        // If provider already stamped CURRENT_MAC (26.6), keep it
+        if advertised.contains("MacBookPro18,3") || advertised.contains("macOS;26.") {
             return (currentMac, currentMacUA)
         }
         if advertised.contains("<PC>") || advertised.contains("Windows") {
@@ -1430,6 +1430,20 @@ public extension DeveloperPortal {
         if ua.isEmpty { ua = akdUA }
         return (advertised, ua)
     }
+
+    private static func macOSVersion(fromClientInfo client: String) -> (Int, Int)? {
+        for marker in ["<macOS;", "<Mac OS X;"] {
+            guard let r = client.range(of: marker) else { continue }
+            let rest = client[r.upperBound...]
+            let end = rest.firstIndex(where: { $0 == ";" || $0 == ">" }) ?? rest.endIndex
+            let version = rest[..<end].trimmingCharacters(in: .whitespaces)
+            let parts = version.split(separator: ".").compactMap { Int($0) }
+            guard let major = parts.first else { return nil }
+            return (major, parts.count > 1 ? parts[1] : 0)
+        }
+        return nil
+    }
+
 
     private static let macClientInfoFor2FA = "<Mac15,7> <macOS;27.0;26A5378j> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
 
