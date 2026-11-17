@@ -134,4 +134,34 @@ struct SideSignTests {
             "com.example.app.CrashReporterExtension"
         ])
     }
+
+    @Test
+    func appBundleLoadsExtensionsWhenOnlyExtensionsDirectoryExists() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let appURL = tempDir.appendingPathComponent("OnlyExtensions.app")
+        let extensionKitURL = appURL.appendingPathComponent("Extensions/CrashReporterExtension Production.appex")
+
+        try FileManager.default.createDirectory(at: extensionKitURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        func writeInfoPlist(at bundleURL: URL, bundleID: String, name: String) throws {
+            let plist: [String: Any] = [
+                "CFBundleIdentifier": bundleID,
+                "CFBundleName": name,
+                "CFBundleShortVersionString": "1.0",
+                "CFBundleVersion": "1",
+                "CFBundlePackageType": bundleURL.pathExtension == "appex" ? "XPC!" : "APPL"
+            ]
+            let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+            try data.write(to: bundleURL.appendingPathComponent("Info.plist"))
+        }
+
+        try writeInfoPlist(at: appURL, bundleID: "com.example.onlyext", name: "OnlyExtensions")
+        try writeInfoPlist(at: extensionKitURL, bundleID: "com.example.onlyext.CrashReporterExtension", name: "CrashReporter")
+
+        let appBundle = try #require(AppBundle(fileURL: appURL))
+        let loadedIDs = Set(appBundle.appExtensions.map(\.bundleIdentifier))
+
+        #expect(loadedIDs == ["com.example.onlyext.CrashReporterExtension"])
+    }
 }
